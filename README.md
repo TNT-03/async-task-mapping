@@ -1,5 +1,5 @@
 # async-task-mapping
-It can flexibly control asynchronous tasks, ignore the order of sending and receiving, allow binding of asynchronous tasks in pending state, and support producer consumer mode and order mode,
+It can make asynchronous tasks that promise cannot complete, ignore the order of sending and receiving, allow binding of asynchronous tasks in pending status, allow triggering a task in multiple functions, and support producer consumer mode and order mode.
 
 English | [简体中文](https://github.com/TNT-03/async-task-mapping/blob/master/README-zh_CN.md) 
 ## Pre-requisites
