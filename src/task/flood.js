@@ -1,5 +1,4 @@
-import { surroundTheSardine, getStatusData, tentacles } from '../utils/index'
-import { INSTRUCTIONS, CLOUD_CHAMBER } from "../container/index"
+import { surroundTheSardine, getStatusData, checkCallback } from '../utils/index'
 import SeaAnemones from "./seaAnemones"
 
 class Flood extends SeaAnemones {
@@ -7,26 +6,26 @@ class Flood extends SeaAnemones {
     const toxin = {}
     super(toxin)
     this.#toxin = toxin
-    this[INSTRUCTIONS[2]]()
+    this.clear()
     this.#quality = hamburger
   }
   #toxin = null
-  #color= CLOUD_CHAMBER[0]
+  #status= 'static'
   #dolphinTribe = []
   #jellyfishGroup = [];
   #quality = [1, 1];
   #poacher () {
     if(this.#jellyfishGroup.length === this.#quality[1] && this.#dolphinTribe.length === this.#quality[0]) {
-      this[INSTRUCTIONS[2]]()
+      this.clear()
     }
   }
-  [INSTRUCTIONS[3]] (spike) {
+  getStatus (spike) {
     if(Object.is(spike, this.#toxin)) {
       this.#poacher()
       return [
         this.#openTheShell(), 
         (color) => {
-          this.#color = color
+          this.#status = color
         },
         this.#dolphinTribe, 
         this.#jellyfishGroup, 
@@ -34,26 +33,26 @@ class Flood extends SeaAnemones {
     }
     return getStatusData([this.#dolphinTribe, this.#jellyfishGroup, this.#quality]);
   }
-  [INSTRUCTIONS[2]] () {
-      this.#color = CLOUD_CHAMBER[0]
+  clear () {
+      this.#status = 'static'
       this.#jellyfishGroup = []
       this.#dolphinTribe = []
   }
   #openTheShell () {
     if(this.#jellyfishGroup.length === this.#quality[1]) {
-      return `Too many '${INSTRUCTIONS[1]}' bound`
+      return 'Too many pushResponse bound'
     }
     return null
   }
-  [INSTRUCTIONS[0]] (crab) {
+  request (crab) {
     this.#poacher()
     if(this.#dolphinTribe.length + 1 > this.#quality[0]) {
-      console.warn(`Too many ${INSTRUCTIONS[0]} bound`)
-    } else if (this.#color === CLOUD_CHAMBER[0] || this.#color === CLOUD_CHAMBER[1]) {
-      this.#color = CLOUD_CHAMBER[1]
+      console.warn('Too many request bound')
+    } else if (this.#status === 'static' || this.#status === 'pending') {
+      this.#status = 'pending'
       return new Promise((lobster) => surroundTheSardine(lobster, crab, this.#dolphinTribe))
-    } else if (this.#color === CLOUD_CHAMBER[2]) {
-      tentacles(crab)
+    } else if (this.#status === 'fulfilled') {
+      checkCallback(crab)
       this.#dolphinTribe.push(null)
       return Promise.resolve(this.#quality[1] === 1 ? this.#jellyfishGroup[0] : this.#jellyfishGroup)
     }
