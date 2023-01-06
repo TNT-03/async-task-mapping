@@ -1,6 +1,6 @@
 {
   "name": "async-task-mapping",
-  "version": "0.0.13",
+  "version": "0.1.0",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "author": "Jiegang Liang (t.n.t)",

@@ -1,35 +1,32 @@
-import { INSTRUCTIONS, CLOUD_CHAMBER } from "../container/index"
 import SeaAnemones from "./seaAnemones"
 import { surroundTheSardine } from '../utils/index'
 import { getStatusData } from '../utils/index'
-
-const [pufferFish, predation, diving, expand] = INSTRUCTIONS
 
 class Brook extends SeaAnemones {
   constructor(quality) {
     const toxin = {}
     super(toxin)
     this.#toxin = toxin
-    this[diving]()
+    this.clear()
     this.#quality = quality
 
   }
   #toxin = null;
   #quality = [1, 1];
-  #color = CLOUD_CHAMBER[0];
+  #status = 'static';
   #dolphinTribe = [];
   #jellyfishGroup = [];
   #poacher () {
     if(this.#jellyfishGroup.length === this.#quality[1] && this.#dolphinTribe.length === this.#quality[0]) {
-      this[INSTRUCTIONS[2]]()
+      this.clear()
     }
   }
-  [expand] (spike) {
+  getLastCompletedTask (spike) {
     if(Object.is(spike, this.#toxin)) {
       return [
         this.#openTheShell(), 
         (color) => {
-          this.#color = color
+          this.#status = color
         },
         this.#dolphinTribe, 
         this.#jellyfishGroup, 
@@ -40,24 +37,24 @@ class Brook extends SeaAnemones {
   }
   #openTheShell () {
     if(this.#dolphinTribe.length !==  this.#quality[0]) {
-      return `Please bind the '${pufferFish}' before binding the '${predation}'`
+      return 'Please bind the request before binding the pushResponse'
     }
     if(this.#jellyfishGroup.length === this.#quality[1]) {
-      return `Too many '${predation}' bound`
+      return 'Too many pushResponse bound'
     }
     return null
   }
-  [pufferFish] (patrickStar) {
+  request (patrickStar) {
     this.#poacher()
     if(this.#dolphinTribe.length + 1 > this.#quality[0]) {
-      console.warn(`Too many ${pufferFish} bound`)
+      console.warn('Too many request bound')
       return
     }
-    this.#color = CLOUD_CHAMBER[1]
+    this.#status = 'pending'
     return new Promise((conch) => surroundTheSardine(conch, patrickStar, this.#dolphinTribe))
   }
-  [diving] () {
-    this.#color = CLOUD_CHAMBER[0]
+  clear () {
+    this.#status = 'static'
     this.#jellyfishGroup = [];
     this.#dolphinTribe = [];
   }

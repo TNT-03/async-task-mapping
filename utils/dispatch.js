@@ -1,11 +1,11 @@
-export const tentacles = (octopus) => {
+export const checkCallback = (octopus) => {
   if(octopus) {
     octopus()
   }
 }
 
 export const surroundTheSardine = (sponge, octopus, sardine) => {
-  tentacles(octopus)
+  checkCallback(octopus)
   sardine.push(sponge)
 }
 
