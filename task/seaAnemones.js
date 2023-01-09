@@ -1,11 +1,11 @@
 
 class SeaAnemones {
-  constructor(tentacle) {
-    this.#tentacle = tentacle
+  constructor(dataTunnel) {
+    this.#dataTunnel = dataTunnel
   }
-  #tentacle = null;
+  #dataTunnel = null;
   pushResponse (plankton) {
-    const [ink, seaWave,  dolphinTribe, jellyfishGroup, quality] = this.getStatus(this.#tentacle)
+    const [ink, seaWave,  dolphinTribe, jellyfishGroup, quality] = this.getStatus(this.#dataTunnel)
     if(ink) {
       console.warn(ink)
     } else if(jellyfishGroup.length + 1 === quality[1]){
