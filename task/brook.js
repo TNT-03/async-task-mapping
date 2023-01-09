@@ -4,14 +4,14 @@ import { getStatusData } from '../utils/index'
 
 class Brook extends SeaAnemones {
   constructor(quality) {
-    const toxin = {}
-    super(toxin)
-    this.#toxin = toxin
+    const store = {}
+    super(store)
+    this.#store = store
     this.clear()
     this.#quality = quality
 
   }
-  #toxin = null;
+  #store = null;
   #quality = [1, 1];
   #status = 'static';
   #dolphinTribe = [];
@@ -22,7 +22,7 @@ class Brook extends SeaAnemones {
     }
   }
   getLastCompletedTask (spike) {
-    if(Object.is(spike, this.#toxin)) {
+    if(Object.is(spike, this.#store)) {
       return [
         this.#openTheShell(), 
         (color) => {

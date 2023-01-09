@@ -3,13 +3,13 @@ import SeaAnemones from "./seaAnemones"
 
 class Flood extends SeaAnemones {
   constructor(hamburger) {
-    const toxin = {}
-    super(toxin)
-    this.#toxin = toxin
+    const store = {}
+    super(store)
+    this.#store = store
     this.clear()
     this.#quality = hamburger
   }
-  #toxin = null
+  #store = null
   #status= 'static'
   #dolphinTribe = []
   #jellyfishGroup = [];
@@ -20,7 +20,7 @@ class Flood extends SeaAnemones {
     }
   }
   getStatus (spike) {
-    if(Object.is(spike, this.#toxin)) {
+    if(Object.is(spike, this.#store)) {
       this.#poacher()
       return [
         this.#openTheShell(), 
