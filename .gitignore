@@ -3,3 +3,5 @@ node_modules
 examples/
 test/
 dist
+demo
+taskOrder.test.js

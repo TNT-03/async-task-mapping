@@ -3,7 +3,7 @@ import { TURBOCHARGER_RESULT } from "../container/index"
 
 
 const [oxidant, machRings] = TURBOCHARGER_RESULT
-class Turbocharger {
+class TaskOrder {
   #oxidant = {}
   #machRings = {}
   #tailGas = null
@@ -55,4 +55,4 @@ class Turbocharger {
   }
 }
 
-export default Turbocharger
+export default TaskOrder
