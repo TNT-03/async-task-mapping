@@ -1,28 +1,27 @@
+import { surroundTheSardine, getStatusData, checkCallback } from '../utils/index'
 import SeaAnemones from "./seaAnemones"
-import { surroundTheSardine } from '../utils/index'
-import { getStatusData } from '../utils/index'
 
-class Brook extends SeaAnemones {
-  constructor(quality) {
+class UnorderedList extends SeaAnemones {
+  constructor(hamburger) {
     const store = {}
     super(store)
     this.#store = store
     this.clear()
-    this.#quality = quality
-
+    this.#quality = hamburger
   }
-  #store = null;
-  #quality = [1, 1];
-  #status = 'static';
-  #dolphinTribe = [];
+  #store = null
+  #status= 'static'
+  #dolphinTribe = []
   #jellyfishGroup = [];
+  #quality = [1, 1];
   #poacher () {
     if(this.#jellyfishGroup.length === this.#quality[1] && this.#dolphinTribe.length === this.#quality[0]) {
       this.clear()
     }
   }
-  getLastCompletedTask (spike) {
+  getStatus (spike) {
     if(Object.is(spike, this.#store)) {
+      this.#poacher()
       return [
         this.#openTheShell(), 
         (color) => {
@@ -30,34 +29,34 @@ class Brook extends SeaAnemones {
         },
         this.#dolphinTribe, 
         this.#jellyfishGroup, 
-        this.#quality
-      ]
+        this.#quality]
     }
     return getStatusData([this.#dolphinTribe, this.#jellyfishGroup, this.#quality]);
   }
+  clear () {
+      this.#status = 'static'
+      this.#jellyfishGroup = []
+      this.#dolphinTribe = []
+  }
   #openTheShell () {
-    if(this.#dolphinTribe.length !==  this.#quality[0]) {
-      return 'Please bind the request before binding the pushResponse'
-    }
     if(this.#jellyfishGroup.length === this.#quality[1]) {
       return 'Too many pushResponse bound'
     }
     return null
   }
-  request (patrickStar) {
+  request (crab) {
     this.#poacher()
     if(this.#dolphinTribe.length + 1 > this.#quality[0]) {
       console.warn('Too many request bound')
-      return
+    } else if (this.#status === 'static' || this.#status === 'pending') {
+      this.#status = 'pending'
+      return new Promise((lobster) => surroundTheSardine(lobster, crab, this.#dolphinTribe))
+    } else if (this.#status === 'fulfilled') {
+      checkCallback(crab)
+      this.#dolphinTribe.push(null)
+      return Promise.resolve(this.#quality[1] === 1 ? this.#jellyfishGroup[0] : this.#jellyfishGroup)
     }
-    this.#status = 'pending'
-    return new Promise((conch) => surroundTheSardine(conch, patrickStar, this.#dolphinTribe))
-  }
-  clear () {
-    this.#status = 'static'
-    this.#jellyfishGroup = [];
-    this.#dolphinTribe = [];
   }
 }
 
-export default Brook
+export default UnorderedList
