@@ -59,6 +59,8 @@ const asyncTask = createTaskList({ordered: true, requestCount: 2, responseCount:
 | request        | 接收的方法，可以传入一个立即执行的函数     | Promise类型, 如果responseCount为1，<br>得到的data是pushResponse的原数据，<br> 如果responseCount大于1，将得到一个数组 |
 | pushResponse   | 增加数据的方法 | -- |
 | clear          | 清空所有的状态 | -- |
+| paused (v0.1.0)          | 暂停任务 | -- |
+| running (v0.1.0)          | 继续匹配任务 | -- |
 | getStatus      | 获取当前状态   | {<br>&nbsp;&nbsp; requestDone: false (是否完成所有的request绑定), <br>&nbsp;&nbsp; responseDone: false (是否完成所有的pushResponse), <br>&nbsp;&nbsp; requestCount: 1 (已绑定的request数量),<br>&nbsp;&nbsp; responseCount: 1 (已完成的pushResponse数量)<br>} |
 
 
@@ -103,8 +105,10 @@ const taskOrder = createTaskOrder()
 | request        | 接收数据的方法，可以传入一个立即执行的函数    | Promise类型, 得到的data是pushResponse的原数据 |
 | pushResponse   | 增加数据的方法 | -- |
 | clear          | 清空所有的状态 | -- |
+| paused (v0.1.0)          | 暂停任务 | -- |
+| running (v0.1.0)          | 继续匹配任务 | -- |
 | getStatus      | 获取当前状态   | {<br>&nbsp;&nbsp; pendingRequests: 0 (未完成匹配的request数量), <br>&nbsp;&nbsp; pendingResponses: 0 (未完成匹配的response数量)<br>} |
-| getLastCompletedTask          | 获取最后一个request与response完成匹配的数据 | -- |
+| getLastCompletedTask<br>(v0.1.0) | 获取最后一个request与response完成匹配的数据 | -- |
 
 
 ### 开源协议
