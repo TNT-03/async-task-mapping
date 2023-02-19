@@ -21,7 +21,7 @@ class OrderedList extends SeaAnemones {
       this.clear()
     }
   }
-  getLastCompletedTask (spike) {
+  getStatus (spike) {
     if(Object.is(spike, this.#store)) {
       return [
         this.#openTheShell(), 

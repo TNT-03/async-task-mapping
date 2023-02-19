@@ -53,6 +53,9 @@ class TaskOrder {
   #getTailGas () {
     return this.#tailGas
   }
+  getLastCompletedTask() {
+    return ''
+  }
 }
 
 export default TaskOrder

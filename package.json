@@ -33,7 +33,7 @@
     "dist"
   ],
   "scripts": {
-    "test": "jest",
+    "test": "npm run build && jest",
     "dev": "rollup -c config/rollup.config.dev.js",
     "build": "rollup -c config/rollup.config.build.js",
     "publish": "npm run build && npm publish"

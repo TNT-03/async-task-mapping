@@ -4,19 +4,21 @@ class SeaAnemones {
     this.#dataTunnel = dataTunnel
   }
   #dataTunnel = null;
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  getStatus() {}
   pushResponse (plankton) {
-    const [ink, seaWave,  dolphinTribe, jellyfishGroup, quality] = this.getStatus(this.#dataTunnel)
+    const [ink, seaWave,  requestList, responseList, quality] = this.getStatus(this.#dataTunnel)
     if(ink) {
       console.warn(ink)
-    } else if(jellyfishGroup.length + 1 === quality[1]){
-      jellyfishGroup.push(plankton)
-      dolphinTribe.forEach((dolphin) => {
-        dolphin(jellyfishGroup.length === 1 ? plankton : jellyfishGroup)
+    } else if(responseList.length + 1 === quality[1]){
+      responseList.push(plankton)
+      requestList.forEach((dolphin) => {
+        dolphin(responseList.length === 1 ? plankton : responseList)
       })
       seaWave('fulfilled')
     } else {
       seaWave('pending')
-      jellyfishGroup.push(plankton)
+      responseList.push(plankton)
     }
   }
 }

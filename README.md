@@ -59,6 +59,8 @@ You can use these functions in different methods. The result of the above code i
 | request        | Used to access data | Promise type, The data obtained is the original data of <br> pushResponse. If the responseCount is greater than 1,<br> an array will be obtained|
 | pushResponse   | Used to add data | -- |
 | clear          | Clear all statuses | -- |
+| paused (v0.1.0)          | pause task | -- |
+| running (v0.1.0)          | continue matching tasks | -- |
 | getStatus      | Get current status | {<br>&nbsp;&nbsp;// Whether to complete all request binding <br> &nbsp;&nbsp; requestDone: false, <br>&nbsp;&nbsp;// Whether to complete all pushResponse<br>&nbsp;&nbsp; responseDone: false, <br>&nbsp;&nbsp; //Number of requests bound <br>&nbsp;&nbsp; requestCount: 1 (Number of requests bound), <br>&nbsp;&nbsp; // Number of pushResponse complete<br>&nbsp;&nbsp;responseCount: 1 (Number of pushResponse completed)<br>} |
 
 ### use createTaskOrder
@@ -100,6 +102,8 @@ You can use these functions in different methods. The result of the above code i
 | request        | The method to access data, which can be <br> passed in a function to be executed immediately    | Promise type, the data obtained is the original data of <br> pushResponse |
 | pushResponse   | Used to add data | -- |
 | clear          | Clear all statuses | -- |
+| paused (v0.1.0)          | pause task | -- |
+| running (v0.1.0)          | continue matching tasks | -- |
 | getStatus      | Get current status   | {<br>&nbsp;&nbsp;//Number of incomplete matching requests<br>&nbsp;&nbsp;pendingRequests: 0, <br>&nbsp;&nbsp;//Number of responses that have not completed matching<br>&nbsp;&nbsp;pendingResponses: 0 <br> } |
 | getLastCompletedTask  | Get the data matching the last request with the response | -- |
 
