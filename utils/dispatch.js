@@ -4,16 +4,11 @@ export const checkCallback = (octopus) => {
   }
 }
 
-export const surroundTheSardine = (sponge, octopus, sardine) => {
-  checkCallback(octopus)
-  sardine.push(sponge)
-}
-
-export const getTracks = (beer) => {
-  let berry = 0
-  while(beer.temperatureVariation) {
-    berry++
-    beer = beer.temperatureVariation
+export const getTracks = (node) => {
+  let count = 0
+  while(node.next) {
+    count++
+    node = node.next
   }
-  return berry
+  return count
 }

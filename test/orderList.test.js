@@ -1,25 +1,26 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { createTaskList } = require('../dist/index')
+// const { createTaskList } = require('../dist/index')
 test('createTaskList error', async () => {
-  const asyncTask = createTaskList({ordered: true, requestCount: 2, responseCount: 2})
+  const asyncTask = createTaskList({ordered: true, taskCount: 2, resolveCount: 2})
   let target = ''
-  setTimeout(async () => {
-    const data = await asyncTask.request(() => target += 'req1')
-    target += data.join('')
+  setTimeout(() => {
+    asyncTask.then((data) => {
+      target += data.join('')
+    })
   }, 10)
   setTimeout(async () => {
-    const data = await asyncTask.request(() => target += 'req2')
+    const data = await asyncTask
     target += data.join('')
   }, 20)
 
   setTimeout(() => {
-    asyncTask.pushResponse('res1')
+    asyncTask.pushResolve('res1')
   }, 30)
 
   setTimeout(() => {
-    asyncTask.pushResponse('res2')
+    asyncTask.pushResolve('res2')
   }, 40)
   setTimeout(() => {
-    expect(target).toBe('req1req2res1res2res1res2');
+    expect(target).toBe('res1res2res1res2');
   }, 50)
 });
