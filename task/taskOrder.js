@@ -1,57 +1,66 @@
-import { getSpareParts, getTracks } from '../utils/index'
-import { TURBOCHARGER_RESULT } from "../container/index"
+import { getTracks } from '../utils/index'
+import Cell from './cell'
 
-
-const [oxidant, machRings] = TURBOCHARGER_RESULT
-class TaskOrder {
-  #oxidant = {}
-  #machRings = {}
-  #tailGas = null
+class TaskOrder extends Cell{
+  //  链带
+  #resolveChain ={}
+  #requestChain ={}
+  //  拉头
+  #slider = {}
+  #lastResolveData = null
+  #paused = false
   constructor() {
-    this.#arresting()
-    getSpareParts(this, [this.#oxidationReductionReaction, this.#produceHighVoltage, this.#arresting, this.#acquirePressure, this.#getTailGas])
+    super()
+    this.clear()
   }
-  #arresting () {
-    this.#oxidant = {}
-    this.#machRings = this.#oxidant
+  clear () {
+    this.#slider = {}
+    this.#resolveChain = this.#slider
+    this.#requestChain = this.#slider
   }
-  #acquirePressure () {
+  getStatus () {
     return {
-      [oxidant]: getTracks(this.#machRings),
-      [machRings]: getTracks(this.#oxidant)
-    } 
-  }
-  #receiveOxidant (estimatedSpeed, switchingSpeed) {
-    this.#oxidant.temperatureVariation = {
-      addOxidant: estimatedSpeed
-    }
-    this.#oxidant = this.#oxidant.temperatureVariation
-    switchingSpeed()
-  }
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  #oxidationReductionReaction (switchingSpeed = () => {}) {
-    if(this.#oxidant.temperatureVariation) {
-      switchingSpeed()
-      this.#oxidant = this.#oxidant.temperatureVariation
-      this.#tailGas = this.#oxidant.machRings
-      return Promise.resolve(this.#oxidant.machRings)
-    } else {
-      return new Promise((estimatedSpeed) => this.#receiveOxidant(estimatedSpeed, switchingSpeed))
+      pendingRequests: getTracks(this.#requestChain),
+      pendingResolve: getTracks(this.#resolveChain)
     }
   }
-  #produceHighVoltage (mixture) {
-    if(this.#machRings.temperatureVariation) {
-      this.#tailGas = mixture
-      this.#machRings.temperatureVariation.addOxidant(mixture)
-    } else {
-      this.#machRings.temperatureVariation = {
-        machRings: mixture
-      }
+  #zipUp () {
+    if(this.#paused) {
+      return
     }
-    this.#machRings = this.#machRings.temperatureVariation
+    const next = this.#slider.next
+    if(next && next.request && next.resolveData) {
+      this.#lastResolveData = next.resolveData
+      this.#slider = next
+      next.request(next.resolveData)
+    }
   }
-  #getTailGas () {
-    return this.#tailGas
+  #addChainTeeth (node) {
+    let next = node.next ? node.next : {}
+    next = next.next
+    return next
+  }
+  request () {
+    return new Promise((request) =>{
+      this.#requestChain = this.#addChainTeeth(this.#requestChain)
+      this.#requestChain.request = request
+      this.#zipUp()
+    })
+  }
+  pushResolve (resolveData) {
+    this.#requestChain = this.#addChainTeeth(this.#requestChain)
+    this.#requestChain.resolveData = resolveData
+    this.#zipUp()
+  }
+  getLastCompletedTask() {
+    return this.#lastResolveData
+  }
+  paused () {
+    this.#paused = true
+  }
+  running() {
+    this.#paused = false
+    this.#zipUp()
   }
 }
 

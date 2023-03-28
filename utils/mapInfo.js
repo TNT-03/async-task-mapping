@@ -14,6 +14,7 @@ const getStatusData = ([dolphinTribe, jellyfishGroup, quality]) => {
     dolphinTribe.length,
     jellyfishGroup.length
   ]
-  return Object.fromEntries(dataList.map((data, i) => ([STATUS_ATTRIBUTE[i], data])))}
+  return Object.fromEntries(dataList.map((data, i) => ([STATUS_ATTRIBUTE[i], data])))
+}
 
 export { getSpareParts, getStatusData }
