@@ -1,62 +1,32 @@
 import SeaAnemones from "./seaAnemones"
-import { surroundTheSardine } from '../utils/index'
-import { getStatusData } from '../utils/index'
 
 class OrderedList extends SeaAnemones {
-  constructor(quality) {
-    const store = {}
+  constructor(taskCount) {
+    const store = {
+      order: true,
+      paused: false,
+      taskCount: taskCount,
+      status: 'static',
+      requestList: [],
+      resolveList: []
+    }
     super(store)
     this.#store = store
-    this.clear()
-    this.#quality = quality
-
   }
   #store = null;
-  #quality = [1, 1];
-  #status = 'static';
-  #dolphinTribe = [];
-  #jellyfishGroup = [];
-  #poacher () {
-    if(this.#jellyfishGroup.length === this.#quality[1] && this.#dolphinTribe.length === this.#quality[0]) {
+  request () {
+    const {resolveList, taskCount, requestList } = this.#store
+    if(resolveList.length === taskCount[1] && requestList.length === taskCount[0]) {
       this.clear()
     }
-  }
-  getStatus (spike) {
-    if(Object.is(spike, this.#store)) {
-      return [
-        this.#openTheShell(), 
-        (color) => {
-          this.#status = color
-        },
-        this.#dolphinTribe, 
-        this.#jellyfishGroup, 
-        this.#quality
-      ]
-    }
-    return getStatusData([this.#dolphinTribe, this.#jellyfishGroup, this.#quality]);
-  }
-  #openTheShell () {
-    if(this.#dolphinTribe.length !==  this.#quality[0]) {
-      return 'Please bind the request before binding the pushResponse'
-    }
-    if(this.#jellyfishGroup.length === this.#quality[1]) {
-      return 'Too many pushResponse bound'
-    }
-    return null
-  }
-  request (patrickStar) {
-    this.#poacher()
-    if(this.#dolphinTribe.length + 1 > this.#quality[0]) {
+    if(requestList.length + 1 > taskCount[0]) {
       console.warn('Too many request bound')
       return
     }
-    this.#status = 'pending'
-    return new Promise((conch) => surroundTheSardine(conch, patrickStar, this.#dolphinTribe))
-  }
-  clear () {
-    this.#status = 'static'
-    this.#jellyfishGroup = [];
-    this.#dolphinTribe = [];
+    this.#store.status = 'pending'
+    return new Promise((conch) => {
+      requestList.push(conch)
+    })
   }
 }
 

@@ -1,25 +1,54 @@
+import Cell from './cell'
+import { getStatusData } from '../utils/index'
 
-class SeaAnemones {
-  constructor(dataTunnel) {
-    this.#dataTunnel = dataTunnel
+class SeaAnemones extends Cell{
+  constructor(store) {
+    super()
+    this.#store = store
   }
-  #dataTunnel = null;
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  getStatus() {}
-  pushResponse (plankton) {
-    const [ink, seaWave,  requestList, responseList, quality] = this.getStatus(this.#dataTunnel)
-    if(ink) {
-      console.warn(ink)
-    } else if(responseList.length + 1 === quality[1]){
-      responseList.push(plankton)
-      requestList.forEach((dolphin) => {
-        dolphin(responseList.length === 1 ? plankton : responseList)
-      })
-      seaWave('fulfilled')
-    } else {
-      seaWave('pending')
-      responseList.push(plankton)
+  #store = null;
+  pushResolve (resolve, name) {
+    const { order, paused, resolveList, taskCount, requestList } = this.#store
+    if(order && requestList.length !==  taskCount[0]) {
+      return 'Please bind the request before binding the pushResolve'
     }
+    if(resolveList.length === taskCount[1]) {
+      return 'Too many pushResolve bound'
+    }
+    resolveList.push(resolve)
+    if(name) {
+      resolveList[name] = resolve
+    }
+    if(paused) {
+      return
+    }
+    this.running()
+  }
+  paused () {
+    this.#store.paused = true
+  }
+  running() {
+    if(resolveList.length === taskCount[1]){
+      requestList.forEach((callback) => {
+        callback(resolveList)
+      })
+      this.#store.status = 'fulfilled'
+    } else {
+      this.#store.status = 'pending'
+    }
+    this.#store.paused = false
+  }
+  clear () {
+    [ 
+      this.#store.taskCount,
+      this.#store.status,
+      this.#store.requestList,
+      this.#store.resolveList
+    ] = [[1, 1], 'static', [], []]
+  }
+  getStatus () {
+    const { requestList, resolveList, taskCount } = this.#store
+    return getStatusData([requestList, resolveList, taskCount])
   }
 }
 export default SeaAnemones

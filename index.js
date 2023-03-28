@@ -7,9 +7,16 @@ const createTaskOrder = () => {
   return new TaskOrder()
 }
 
-const createTaskList = ({ requestCount, responseCount, ordered = true } = {}) => {
-  return new (ordered ? OrderedList : UnorderedList)([requestCount || 1, responseCount || 1])
-}
-
+const createTaskList = ({
+  requestCount,
+  taskCount,
+  responseCount,
+  resolveCount,
+  ordered = true
+} = {}) =>
+  new (ordered ? OrderedList : UnorderedList)([
+    taskCount || requestCount || 1,
+    resolveCount || responseCount || 1
+  ])
 
 export { createTaskList, createTaskOrder }
