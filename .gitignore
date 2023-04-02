@@ -1,7 +1,5 @@
 node_modules
 .DS_Store
 examples/
-test/
 dist
 demo
-taskOrder.test.js
