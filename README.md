@@ -30,17 +30,17 @@ const asyncTask = createTaskList({
 
 setTimeout(async () => {
   // A Promise.resolve is returned here. You can use either async/await or .then.
-  const data = await asyncTask;
-  console.log("data-1", data);
+  const { list, dataMap } = await asyncTask;
+  console.log("data-1", list[0]);
   // or
-  asyncTask.then((data) => {
-    console.log("data-1", data);
+  asyncTask.then(({ list, dataMap }) => {
+    console.log("data-1", list[0]);
   });
 }, 100);
 
 setTimeout(async () => {
-  const data = await asyncTask;
-  console.log("data-2", data);
+  const { list, dataMap } = await asyncTask;
+  console.log("data-2", dataMap.res2);
 }, 200);
 
 setTimeout(() => {
@@ -48,7 +48,7 @@ setTimeout(() => {
 }, 300);
 
 setTimeout(() => {
-  asyncTask.pushResolve("response2");
+  asyncTask.pushResolve("response2", "res2");
 }, 400);
 ```
 
@@ -70,13 +70,14 @@ You can use these functions in different methods. The result of the above code i
 
 #### Methods on createTaskList Instances
 
-| name        | description             | returned data structure                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ----------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| pushResolve | Used to add data        | --                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| clear       | Clear all statuses      | --                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| paused      | pause task              | --                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| running     | continue matching tasks | --                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| getStatus   | Get current status      | {<br>&nbsp;&nbsp;// Whether to complete all request binding <br> &nbsp;&nbsp; requestDone: false, <br>&nbsp;&nbsp;// Whether to complete all pushResolve<br>&nbsp;&nbsp; responseDone: false, <br>&nbsp;&nbsp; //Number of requests bound <br>&nbsp;&nbsp; requestCount: 1 (Number of requests bound), <br>&nbsp;&nbsp; // Number of pushResolve complete<br>&nbsp;&nbsp;responseCount: 1 (Number of pushResolve completed)<br>} |
+| name        | description                    | returned data structure                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| then\*      | The original method of promise | task.then(({list, dataMap})=>{})                                                                                                                                                                                                                                                                                                                                                                                                 |
+| pushResolve | Used to add data               | pushResolve(data, name), Not required, data of Promise.resolve                                                                                                                                                                                                                                                                                                                                                                   |
+| clear       | Clear all statuses             | --                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| paused      | pause task                     | --                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| running     | continue matching tasks        | --                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| getStatus   | Get current status             | {<br>&nbsp;&nbsp;// Whether to complete all request binding <br> &nbsp;&nbsp; requestDone: false, <br>&nbsp;&nbsp;// Whether to complete all pushResolve<br>&nbsp;&nbsp; responseDone: false, <br>&nbsp;&nbsp; //Number of requests bound <br>&nbsp;&nbsp; requestCount: 1 (Number of requests bound), <br>&nbsp;&nbsp; // Number of pushResolve complete<br>&nbsp;&nbsp;responseCount: 1 (Number of pushResolve completed)<br>} |
 
 ### use createTaskOrder
 

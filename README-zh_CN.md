@@ -30,17 +30,17 @@ const asyncTask = createTaskList({
 
 setTimeout(async () => {
   // 这里返回一个Promise.resolve，你可以使用async/await或者.then.
-  const data = await asyncTask;
-  console.log("data-1", data);
+  const { list, dataMap } = await asyncTask;
+  console.log("data-1", list[0]);
   // 或者
-  asyncTask.then((data) => {
-    console.log("data-1", data);
+  asyncTask.then(({ list, dataMap }) => {
+    console.log("data-1", list[0]);
   });
 }, 100);
 
 setTimeout(async () => {
-  const data = await asyncTask;
-  console.log("data-2", data);
+  const { list, dataMap } = await asyncTask;
+  console.log("data-2", dataMap.res2);
 }, 200);
 
 setTimeout(() => {
@@ -48,7 +48,7 @@ setTimeout(() => {
 }, 300);
 
 setTimeout(() => {
-  asyncTask.pushResolve("response2");
+  asyncTask.pushResolve("response2", "res2");
 }, 400);
 ```
 
@@ -70,13 +70,14 @@ setTimeout(() => {
 
 #### createTaskList 实例上的方法
 
-| 名称        | 描述           | 返回值的数据结构                                                                                                                                                                                                                                                   |
-| ----------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| pushResolve | 增加数据的方法 | --                                                                                                                                                                                                                                                                 |
-| clear       | 清空所有的状态 | --                                                                                                                                                                                                                                                                 |
-| paused      | 暂停任务       | --                                                                                                                                                                                                                                                                 |
-| running     | 继续匹配任务   | --                                                                                                                                                                                                                                                                 |
-| getStatus   | 获取当前状态   | {<br>&nbsp;&nbsp; requestDone: false (是否完成所有的 request 绑定), <br>&nbsp;&nbsp; responseDone: false (是否完成所有的 pushResolve), <br>&nbsp;&nbsp; requestCount: 1 (已绑定的 request 数量),<br>&nbsp;&nbsp; responseCount: 1 (已完成的 pushResolve 数量)<br>} |
+| 名称        | 描述                 | 返回值的数据结构                                                                                                                                                                                                                                                   |
+| ----------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| then\*      | promise 上原有的方法 | task.then(({list, dataMap})=>{})                                                                                                                                                                                                                                   |
+| pushResolve | 增加数据的方法       | pushResolve(data, name), 非必填，Promise.resolve 的数据                                                                                                                                                                                                            |
+| clear       | 清空所有的状态       | --                                                                                                                                                                                                                                                                 |
+| paused      | 暂停任务             | --                                                                                                                                                                                                                                                                 |
+| running     | 继续匹配任务         | --                                                                                                                                                                                                                                                                 |
+| getStatus   | 获取当前状态         | {<br>&nbsp;&nbsp; requestDone: false (是否完成所有的 request 绑定), <br>&nbsp;&nbsp; responseDone: false (是否完成所有的 pushResolve), <br>&nbsp;&nbsp; requestCount: 1 (已绑定的 request 数量),<br>&nbsp;&nbsp; responseCount: 1 (已完成的 pushResolve 数量)<br>} |
 
 ### 使用 createTaskOrder
 

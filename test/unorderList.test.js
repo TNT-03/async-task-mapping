@@ -1,8 +1,8 @@
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line
 const { createTaskList } = require("../dist/index");
-test("createTaskList error", async () => {
+test("unorderList error", async () => {
   const asyncTask = createTaskList({
-    ordered: true,
+    ordered: false,
     taskCount: 2,
     resolveCount: 2,
   });
@@ -14,7 +14,7 @@ test("createTaskList error", async () => {
   }, 10);
   setTimeout(async () => {
     const { list, dataMap } = await asyncTask;
-    target += list.join("") + dataMap.res2_name;
+    target += list.join("") + dataMap.res2;
   }, 20);
 
   setTimeout(() => {
@@ -22,7 +22,7 @@ test("createTaskList error", async () => {
   }, 30);
 
   setTimeout(() => {
-    asyncTask.pushResolve("res2", "res2_name");
+    asyncTask.pushResolve("res2", "res2");
   }, 40);
   setTimeout(() => {
     expect(target).toBe("res1res2res1res2" + "res2");

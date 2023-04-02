@@ -1,5 +1,5 @@
 import SeaAnemones from "./seaAnemones";
-import { checkCallback } from "./../utils";
+import { checkCallback } from "./../utils/index";
 
 class UnorderedList extends SeaAnemones {
   constructor(taskCount) {
@@ -8,12 +8,13 @@ class UnorderedList extends SeaAnemones {
       status: "static",
       requestList: [],
       resolveList: [],
+      dataMap: {},
     };
     super(store);
     this.#store = store;
   }
   #store = null;
-  request() {
+  request(cb) {
     checkCallback(cb);
     const { resolveList, taskCount, requestList } = this.#store;
     if (
