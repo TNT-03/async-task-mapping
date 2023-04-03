@@ -1,6 +1,6 @@
 {
   "name": "async-task-mapping",
-  "version": "1.0.0-beta",
+  "version": "1.0.0",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "author": "Jiegang Liang (t.n.t)",
@@ -36,7 +36,7 @@
   "license": "MIT",
   "description": "Asynchronous Task Manager.",
   "npmName": "async-task-mapping",
-  "keywords": ["async", "task", "mapping", "list", "await", "promise"],
+  "keywords": ["async", "task", "mapping", "list", "await", "promise", "manage"],
   "npmFileMap": [
     {
       "basePath": "/dist/",
