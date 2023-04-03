@@ -18,7 +18,7 @@ npm i async-task-mapping --save
 
 ### use createTaskList
 
-version 1.0.0-beta
+version
 
 ```javascript
 import { createTaskList } from "async-task-mapping";

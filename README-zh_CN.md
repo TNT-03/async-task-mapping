@@ -18,7 +18,7 @@ npm i async-task-mapping --save
 
 ### 使用 createTaskList
 
-版本 1.0.0-beta
+版本
 
 ```javascript
 import { createTaskList } from "async-task-mapping";

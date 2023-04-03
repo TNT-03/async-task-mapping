@@ -1,5 +1,5 @@
 import SeaAnemones from "./seaAnemones";
-import { checkCallback } from "./../utils/index";
+import { checkCallback, addOldMotheds } from "./../utils/index";
 
 class UnorderedList extends SeaAnemones {
   constructor(taskCount) {
@@ -12,6 +12,7 @@ class UnorderedList extends SeaAnemones {
     };
     super(store);
     this.#store = store;
+    addOldMotheds(this);
   }
   #store = null;
   request(cb) {

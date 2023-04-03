@@ -1,5 +1,6 @@
 import { getTracks } from "../utils/index";
 import Cell from "./cell";
+import { addOldMotheds } from "./../utils/index";
 
 class TaskOrder extends Cell {
   //  链带
@@ -12,6 +13,7 @@ class TaskOrder extends Cell {
   constructor() {
     super();
     this.clear();
+    addOldMotheds(this);
   }
   clear() {
     this.#slider = {};
