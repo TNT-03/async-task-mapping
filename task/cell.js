@@ -10,9 +10,7 @@ class Cell {
       : Object.getOwnPropertyNames(Promise.prototype);
     const motheds = allMotheds.filter((item) => !NOISE.includes(item));
     motheds.forEach((mothed) => {
-      this[mothed] = (...arg) => {
-        this.request()[mothed](...arg);
-      };
+      this[mothed] = (...arg) => this.request()[mothed](...arg);
     });
   }
 }
