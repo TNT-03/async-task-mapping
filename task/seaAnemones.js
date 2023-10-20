@@ -42,11 +42,10 @@ class SeaAnemones extends Cell {
   }
   clear() {
     [
-      this.#store.taskCount,
       this.#store.status,
       this.#store.requestList,
       this.#store.resolveList,
-    ] = [[1, 1], "static", [], []];
+    ] = ["static", [], []];
   }
   getStatus() {
     const { requestList, resolveList, taskCount } = this.#store;
