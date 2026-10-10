@@ -1,5 +1,10 @@
 # async-task-mapping
 
+[![npm version](https://img.shields.io/npm/v/async-task-mapping)](https://www.npmjs.com/package/async-task-mapping)
+[![CI](https://github.com/TNT-03/async-task-mapping/actions/workflows/ci.yml/badge.svg)](https://github.com/TNT-03/async-task-mapping/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/async-task-mapping)](https://github.com/TNT-03/async-task-mapping/blob/master/LICENSE)
+[![node](https://img.shields.io/node/v/async-task-mapping)](https://www.npmjs.com/package/async-task-mapping)
+
 It can make asynchronous tasks that promise cannot complete, ignore the order of sending and receiving, allow binding of asynchronous tasks in pending status, allow triggering a task in multiple functions, and support producer consumer mode and order mode.
 
 English | [简体中文](https://github.com/TNT-03/async-task-mapping/blob/master/README-zh_CN.md)
@@ -264,6 +269,10 @@ Notes:
 
 - `ordered` defaults to `true`, as it did in the 1.x code (the 1.x README said `false` by mistake). If you rely on pushing data before binding requests, set `ordered: false` explicitly.
 - `getStatus()` of `createTaskOrder` uses `pendingResolve` (the 1.x README wrote `pendingResponses` by mistake).
+
+### Contributing
+
+Issues and pull requests are welcome, please read [CONTRIBUTING.md](https://github.com/TNT-03/async-task-mapping/blob/master/CONTRIBUTING.md) first (written in Chinese).
 
 ### License
 
