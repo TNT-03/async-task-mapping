@@ -139,6 +139,45 @@ describe("createStepTask", () => {
     expect(started).toEqual([0]);
   });
 
+  it("任务会收到 options.signal,abort 时运行中的任务能感知到取消", async () => {
+    const controller = new AbortController();
+    const received: AbortSignal[] = [];
+    const gate = deferred<number>();
+    const reason = new Error("stop");
+    const result = expect(
+      createStepTask(
+        [
+          (signal) => {
+            received.push(signal);
+            return gate.promise;
+          },
+        ],
+        { limit: 1, signal: controller.signal },
+      ),
+    ).rejects.toBe(reason);
+    expect(received[0]).toBe(controller.signal);
+    expect(received[0]?.aborted).toBe(false);
+    controller.abort(reason);
+    await result;
+    expect(received[0]?.aborted).toBe(true);
+    gate.resolve(1);
+  });
+
+  it("没有传入 signal 时,任务收到的是一个永不 abort 的 AbortSignal", async () => {
+    const received: AbortSignal[] = [];
+    await createStepTask(
+      [
+        (signal) => {
+          received.push(signal);
+          return 1;
+        },
+      ],
+      { limit: 1 },
+    );
+    expect(received[0]).toBeInstanceOf(AbortSignal);
+    expect(received[0]?.aborted).toBe(false);
+  });
+
   it("signal 已 aborted 时不会启动任何任务", async () => {
     const task = vi.fn(() => 1);
     const reason = new Error("already");

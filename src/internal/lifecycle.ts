@@ -27,6 +27,33 @@ export function watchAbort(
   };
 }
 
+/** target 被回收后,自动摘掉它留在 signal 上的监听器 */
+const unwatchRegistry = new FinalizationRegistry<() => void>((unwatch) => {
+  unwatch();
+});
+
+/**
+ * 与 `watchAbort` 类似,但只对 `target` 持有弱引用:
+ * - 长寿命的 signal 不会把 `target` 钉在内存里;
+ * - `target` 被回收后,监听器会被摘除,不会在 signal 上越积越多。
+ * 注意:`onAbort` 不能闭包引用 `target`,否则弱引用就失去意义。
+ */
+export function watchAbortWeakly<T extends object>(
+  signal: AbortSignal,
+  target: T,
+  onAbort: (target: T, reason: unknown) => void,
+): void {
+  const ref = new WeakRef(target);
+  const unwatch = watchAbort(signal, (reason) => {
+    const alive = ref.deref();
+    if (alive) {
+      onAbort(alive, reason);
+    }
+  });
+  // 已 aborted 时 unwatch 是空操作,注册也无害
+  unwatchRegistry.register(target, unwatch);
+}
+
 function noop(): void {
   // 无需清理
 }

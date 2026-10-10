@@ -13,4 +13,4 @@ export type {
   TaskOrderStatus,
 } from "./taskOrder/types";
 export { createStepTask } from "./stepTask/stepTask";
-export type { StepTaskOptions } from "./stepTask/stepTask";
+export type { StepTaskFunction, StepTaskOptions } from "./stepTask/stepTask";

@@ -22,7 +22,10 @@ export function assertPositiveInteger(value: unknown, name: string): number {
   return value;
 }
 
-/** undefined 表示不启用;其余必须是大于 0 的有限数字(毫秒) */
+/** setTimeout 的上限(2^31 - 1 毫秒,约 24.8 天),超过会被当成 1ms 立即触发 */
+export const MAX_TIMEOUT = 2_147_483_647;
+
+/** undefined 表示不启用;其余必须是大于 0 且不超过 MAX_TIMEOUT 的数字(毫秒) */
 export function resolveTimeout(value: unknown): number | undefined {
   if (value === undefined) {
     return undefined;
@@ -30,9 +33,9 @@ export function resolveTimeout(value: unknown): number | undefined {
   if (typeof value !== "number") {
     throw new TypeError("timeout must be a positive number of milliseconds");
   }
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!Number.isFinite(value) || value <= 0 || value > MAX_TIMEOUT) {
     throw new RangeError(
-      `timeout must be a positive finite number, got ${String(value)}`,
+      `timeout must be a positive number no greater than ${String(MAX_TIMEOUT)}, got ${String(value)}`,
     );
   }
   return value;
