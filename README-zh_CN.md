@@ -70,7 +70,7 @@ setTimeout(() => {
 | ordered      | 是否有序:有序列表必须先绑定完所有 request,才能 `pushResolve`,否则 `pushResolve` 会抛错                | `true`      |
 | taskCount    | 可以绑定 request 的次数(`request` / `then` / `catch` / `finally` / `await` 都算一次),正整数            | `1`         |
 | resolveCount | 可以 `pushResolve` 的次数,正整数                                                                       | `1`         |
-| timeout      | 超时毫秒数(> 0),从一轮的首个 request 起计时,超时后本轮以 `TaskTimeoutError` reject                    | `undefined` |
+| timeout      | 超时毫秒数(> 0 且 ≤ 2147483647),从一轮的首个 request 起计时,超时后本轮以 `TaskTimeoutError` reject                    | `undefined` |
 | signal       | `AbortSignal`,见 [abort 与 timeout](#abort-与-timeout)                                                 | `undefined` |
 
 非法值会立即抛错:类型不是 number 抛 `TypeError`;`taskCount` / `resolveCount` 不是正整数、`timeout` 不是正数抛 `RangeError`;`signal` 不是 `AbortSignal` 抛 `TypeError`。
@@ -110,7 +110,7 @@ console.log(await task.request());
 // { list: [ 'x', 'y' ], dataMap: { k1: 'x' } }
 ```
 
-`taskCount` 个 request 名额用完且本轮已结算后,下一次 `request` 会开启新的一轮。
+`taskCount` 个 request 名额用完且本轮已结算后,下一次 `request` 会开启新的一轮;无序列表(`ordered: false`)在这种情况下直接 `pushResolve` 也会开启新的一轮。有序列表必须先 `request`,多余的 `pushResolve` 仍会抛 `RangeError`。
 
 ### 使用 createTaskOrder
 
@@ -154,7 +154,7 @@ setTimeout(() => {
 
 | 名称    | 说明                                                                 | 默认值      |
 | ------- | -------------------------------------------------------------------- | ----------- |
-| timeout | **每个** request 的超时毫秒数(> 0),超时的 request 会出队            | `undefined` |
+| timeout | **每个** request 的超时毫秒数(> 0 且 ≤ 2147483647),超时的 request 会出队            | `undefined` |
 | signal  | `AbortSignal`,见 [abort 与 timeout](#abort-与-timeout)               | `undefined` |
 
 #### createTaskOrder 实例上的方法
@@ -165,7 +165,7 @@ setTimeout(() => {
 | then\*               | 实例上的 `then` / `catch` / `finally`,每调用一次相当于 `request()` 一次          | --                                                        |
 | pushResolve          | 添加数据                                                                          | --                                                        |
 | pushReject           | 与队首尚未匹配的 request 配对,并让它以 `reason` reject                           | 不影响之后的 request                                      |
-| clear                | 清空所有状态:pending 的 request 以 `TaskClearedError` reject,未配对的数据被丢弃 | 见 [clear 会 reject](#clear-会-reject-pending-的-request) |
+| clear                | 清空队列:pending 的 request 以 `TaskClearedError` reject,未配对的数据被丢弃     | **不会**重置 `getLastCompletedTask()`,也**不会**解除 `paused()`,见 [clear 会 reject](#clear-会-reject-pending-的-request) |
 | paused               | 暂停匹配                                                                          | `running()` 会一次性配对所有积压的数据                    |
 | running              | 恢复匹配                                                                          | --                                                        |
 | getStatus            | `{ pendingRequests, pendingResolve }`:未匹配的 request 数量与未匹配的数据数量    | --                                                        |
@@ -189,7 +189,12 @@ console.log(await first, "/", await second);
 import { createStepTask } from "async-task-mapping";
 
 const settled = await createStepTask(
-  [() => fetch("/a"), () => fetch("/b"), () => fetch("/c")],
+  [
+    // 任务函数会收到 signal,把它交给 fetch,abort 时就能真正取消请求
+    (signal) => fetch("/a", { signal }),
+    (signal) => fetch("/b", { signal }),
+    (signal) => fetch("/c", { signal }),
+  ],
   {
     limit: 2, // 必填,正整数
     signal: controller.signal, // 可选
@@ -202,7 +207,7 @@ const settled = await createStepTask(
 
 - 同步抛错的任务、不是函数的元素都会记为 `rejected`。返回的 Promise 本身只会因为 `onComplete` 抛错或 `abort` 而 reject。
 - `onComplete` 在全部任务结算后、返回的 Promise resolve 前调用一次;它抛错会使返回的 Promise 以该错误 reject。
-- `abort` 后不再启动新任务,返回的 Promise 以 `signal.reason` reject。已经在运行的任务不会被取消,需要你自己把 signal 传给它们。
+- `abort` 后不再启动新任务,返回的 Promise 以 `signal.reason` reject。已经在运行的任务不会被强制中断,但每个任务函数都会收到同一个 `signal`(没有传入 `signal` 时是一个永不 abort 的信号),把它交给 `fetch` 等 API 即可真正取消。
 - `tasks` 不是数组抛 `TypeError`;`limit` 不是正整数抛 `TypeError` / `RangeError`。
 
 ### 错误类型
@@ -225,6 +230,17 @@ import { TaskClearedError, TaskTimeoutError } from "async-task-mapping";
 
 `async` 函数里 `return` 实例会被隐式展开,相当于多一次 `await`。需要精确控制时请显式 `return task.request()`。
 
+**风险:任何会"展开 thenable"的写法都会悄悄消耗名额**,包括 `Promise.resolve(task)`、`Promise.all([task])`、`Promise.race([...])`,以及把实例交给会 `await` 它的第三方库或测试框架。名额被意外消耗后,真正的消费者会得到 `RangeError`(`createTaskOrder` 则会让数据与错误的 request 配对)。建议在业务代码里始终显式调用 `request()`,不要把实例当作普通 Promise 传来传去。
+
+### clear 不会重置的状态
+
+`createTaskOrder` 的 `clear()` 只清空两个队列(pending 的 request 与未配对的数据):
+
+- `getLastCompletedTask()` 仍会返回 `clear()` 之前最近一次匹配到的数据。
+- 如果之前调用过 `paused()`,`clear()` 之后实例依然是暂停状态,新到的 request / 数据会继续积压,直到 `running()`。
+
+需要这些状态归零时,请自行处理(例如在 `clear()` 之后调用 `running()`,或者直接新建实例)。
+
 ### clear 会 reject pending 的 request
 
 `clear()`(以及 `abort`)会让所有 pending 的 request reject。**如果调用方没有 `catch`,这个 reject 就是 `unhandledRejection`,Node.js 默认会终止进程。**
@@ -236,18 +252,18 @@ task.then(render).catch(() => {}); // 安全
 
 ### abort 与 timeout
 
-- `signal`:abort 后 pending 的 request 以 `signal.reason` reject,之后的 `request()` 同样 reject,`pushResolve` / `pushReject` 会被**静默忽略**(生产者不一定知道消费端已经放弃)。创建实例时 signal 已经 aborted 则立即生效。实例只对 `signal` 持有弱引用,长寿命的 signal 不会让实例无法被回收。
+- `signal`:abort 后 pending 的 request 以 `signal.reason` reject,之后的 `request()` 同样 reject,`pushResolve` / `pushReject` 会被**静默忽略**(生产者不一定知道消费端已经放弃)。创建实例时 signal 已经 aborted 则立即生效。实例只对 `signal` 持有弱引用,长寿命的 signal 不会让实例无法被回收,实例被回收后它留在 signal 上的监听器也会被自动摘除。
 - `createTaskList` 的 `timeout` 从一轮的首个 request 开始计时,针对整轮生效(有序、无序都一样)。**没有人在等就不计时**:无序列表在没有 request 时就用 `pushResolve` 填满数据,不会有定时器,之后迟到的 request 会立即拿到结果。
 - `createTaskOrder` 的 `timeout` 针对每个 request 单独计时。
 
 ### pushReject
 
-- `createTaskList`:fail-fast。整轮失败,失败后 `pushResolve` / `pushReject` 都会抛错,直到调用 `clear()`。在 `paused()` 期间 `pushReject` 也是如此:`running()` 之后 request 才会 reject,而之后的 `pushResolve` 已经会抛错。
+- `createTaskList`:fail-fast。整轮失败(`pushReject` 或 `timeout` 触发都一样),本轮后续绑定的 request 也会 reject,`pushResolve` / `pushReject` 都会抛错。**想立即恢复请调用 `clear()`**;不调用的话,要等 `taskCount` 个 request 名额全部用完,下一次 `request()` 才会开启新的一轮。在 `paused()` 期间 `pushReject` 也是如此:`running()` 之后 request 才会 reject,而之后的 `pushResolve` 已经会抛错。
 - `createTaskOrder`:按先进先出与 request 配对,只会让一个 request reject。
 
 ### paused
 
-`paused()` 只会推迟 `pushResolve` / `pushReject` 的分发。`clear`、`timeout`、`abort` 始终立即生效。
+`paused()` 只会推迟 `pushResolve` / `pushReject` 的分发。`clear`、`timeout`、`abort` 始终立即生效。**注意 `timeout` 不会因为暂停而冻结**:暂停期间计时照常进行,到点就会以 `TaskTimeoutError` reject。如果你的暂停可能持续很久,请不要同时设置较短的 `timeout`。
 
 ## 从 1.x 迁移到 2.0
 

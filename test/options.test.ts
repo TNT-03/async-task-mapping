@@ -32,13 +32,18 @@ describe("createTaskList 入参校验", () => {
     },
   );
 
-  it.each([0, -5, Number.NaN, Number.POSITIVE_INFINITY])(
+  it.each([0, -5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
     "timeout 为 %s 时抛 RangeError",
     (value) => {
       expect(() => createTaskList({ timeout: value })).toThrow(RangeError);
       expect(() => createTaskOrder({ timeout: value })).toThrow(RangeError);
     },
   );
+
+  it("timeout 等于 setTimeout 上限时允许创建", () => {
+    expect(() => createTaskList({ timeout: 2_147_483_647 })).not.toThrow();
+    expect(() => createTaskOrder({ timeout: 2_147_483_647 })).not.toThrow();
+  });
 
   it("timeout / signal 类型不对时抛 TypeError", () => {
     expect(() => createTaskList({ timeout: bad("10") })).toThrow(TypeError);
