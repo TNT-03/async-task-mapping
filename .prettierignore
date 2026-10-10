@@ -1,0 +1,11 @@
+dist
+coverage
+node_modules
+pnpm-lock.yaml
+CHANGELOG.md
+.changeset
+# 文档在后续阶段统一处理
+README.md
+README-zh_CN.md
+todo.md
+LICENSE

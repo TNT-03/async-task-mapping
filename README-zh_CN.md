@@ -6,7 +6,11 @@
 
 ## 使用之前
 
-async-task-mapping 工具没有使用任何第三方依赖包，不会限制技术栈。
+- Node.js >= 22.18(或任何支持 ES2023 的现代运行时)。
+- 仅发布 ESM。`import` 随处可用,Node.js 22.18+ 也可以直接 `require()`。
+- 零运行时依赖,不限制技术栈,自带类型声明。
+
+> 从 1.x 升级?请先看[迁移指南](#从-1x-迁移到-20)。
 
 ## 安装
 
@@ -18,10 +22,9 @@ npm i async-task-mapping --save
 
 ### 使用 createTaskList
 
-版本
-
 ```javascript
 import { createTaskList } from "async-task-mapping";
+// TypeScript 中可以声明数据类型:createTaskList<string>()
 const asyncTask = createTaskList({
   ordered: true,
   taskCount: 2,
@@ -29,13 +32,9 @@ const asyncTask = createTaskList({
 });
 
 setTimeout(async () => {
-  // 这里返回一个Promise.resolve，你可以使用async/await或者.then.
+  // 实例是 thenable,可以使用 async/await,也可以使用 .then
   const { list, dataMap } = await asyncTask;
   console.log("data-1", list[0]);
-  // 或者
-  asyncTask.then(({ list, dataMap }) => {
-    console.log("data-1", list[0]);
-  });
 }, 100);
 
 setTimeout(async () => {
@@ -52,43 +51,71 @@ setTimeout(() => {
 }, 400);
 ```
 
-你可以在不同函数中使用这些方法. 以上代码执行结果为:
+你可以在不同的方法里使用这些函数。同一轮的所有 request 会在 `resolveCount` 份数据全部 push 之后一起结算。上面代码的结果是:
 
 ```javascript
-// time 200: request-2
-// time 300: data-1 response1
+// time 400: data-1 response1
 // time 400: data-2 response2
 ```
 
-#### createTaskList 实例化过程中传入的参数
+#### createTaskList 实例化时传入的参数
 
-| 名称         | 描述           | 默认值 |
-| ------------ | -------------- | ------ |
-| ordered      | 是否为有序     | false  |
-| taskCount    | 读取数据的次数 | 1      |
-| resolveCount | 增加数据的次数 | 1      |
+| 名称         | 说明                                                                                                   | 默认值      |
+| ------------ | ------------------------------------------------------------------------------------------------------ | ----------- |
+| ordered      | 是否有序:有序列表必须先绑定完所有 request,才能 `pushResolve`,否则 `pushResolve` 会抛错                | `true`      |
+| taskCount    | 可以绑定 request 的次数(`request` / `then` / `catch` / `finally` / `await` 都算一次),正整数            | `1`         |
+| resolveCount | 可以 `pushResolve` 的次数,正整数                                                                       | `1`         |
+| timeout      | 超时毫秒数(> 0),从一轮的首个 request 起计时,超时后本轮以 `TaskTimeoutError` reject                    | `undefined` |
+| signal       | `AbortSignal`,见 [abort 与 timeout](#abort-与-timeout)                                                 | `undefined` |
+
+非法值会立即抛错:类型不是 number 抛 `TypeError`;`taskCount` / `resolveCount` 不是正整数、`timeout` 不是正数抛 `RangeError`;`signal` 不是 `AbortSignal` 抛 `TypeError`。
 
 #### createTaskList 实例上的方法
 
-| 名称        | 描述                 | 返回值的数据结构                                                                                                                                                                                                                                                   |
-| ----------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| then\*      | promise 上原有的方法 | task.then(({list, dataMap})=>{})                                                                                                                                                                                                                                   |
-| pushResolve | 增加数据的方法       | pushResolve(data, name), 非必填，Promise.resolve 的数据                                                                                                                                                                                                            |
-| clear       | 清空所有的状态       | --                                                                                                                                                                                                                                                                 |
-| paused      | 暂停任务             | --                                                                                                                                                                                                                                                                 |
-| running     | 继续匹配任务         | --                                                                                                                                                                                                                                                                 |
-| getStatus   | 获取当前状态         | {<br>&nbsp;&nbsp; requestDone: false (是否完成所有的 request 绑定), <br>&nbsp;&nbsp; responseDone: false (是否完成所有的 pushResolve), <br>&nbsp;&nbsp; requestCount: 1 (已绑定的 request 数量),<br>&nbsp;&nbsp; responseCount: 1 (已完成的 pushResolve 数量)<br>} |
+| 名称        | 说明                                                                                       | 备注                                                       |
+| ----------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| request     | 绑定一次 request,返回 Promise                                                              | 超限时返回被 reject 的 Promise(`RangeError`)               |
+| then\*      | 实例上的 `then` / `catch` / `finally`,每调用一次相当于 `request()` 一次                   | `task.then(({ list, dataMap }) => {})`                     |
+| pushResolve | 添加数据:`pushResolve(data, name?)`,传了 `name` 就可以通过 `dataMap[name]` 取到            | 超限、顺序错误(有序列表)、本轮已 `pushReject` 时抛错      |
+| pushReject  | 让本轮以 `reason` 失败,本轮 pending 的和之后的 request 都会 reject(fail-fast)             | 本轮已失败时抛错;有序列表还要求 request 已绑定完           |
+| clear       | 重置本轮,pending 的 request 以 `TaskClearedError` reject                                  | 见 [clear 会 reject](#clear-会-reject-pending-的-request)  |
+| paused      | 暂停分发:`pushResolve` / `pushReject` 仍会记录,但 request 不会结算                        | `clear`、`timeout`、`abort` 不受影响,始终立即生效          |
+| running     | 恢复分发,并在可以结算时立即结算                                                           | --                                                         |
+| getStatus   | 获取当前状态                                                                               | 见下方                                                     |
+
+```javascript
+asyncTask.getStatus();
+// {
+//   requestDone: true,   // 是否已绑定完 taskCount 个 request
+//   responseDone: false, // 是否已完成 resolveCount 次 pushResolve
+//   requestCount: 2,     // 已绑定的 request 数量
+//   responseCount: 0     // 已完成的 pushResolve 数量
+// }
+```
+
+**返回结构。** 无论有序还是无序,`await task` 得到的都是 `{ list, dataMap }`。`list` 按 `pushResolve` 的顺序排列,`dataMap` 是普通对象。每一轮都有自己的快照,后续轮次不会修改之前轮次的结果。
+
+**无序列表。** `ordered: false` 时可以先 push 数据再绑定 request,本轮已 fulfilled 之后才绑定的 request 会立即得到结果:
+
+```javascript
+const task = createTaskList({ ordered: false, resolveCount: 2 });
+task.pushResolve("x", "k1");
+task.pushResolve("y");
+console.log(await task.request());
+// { list: [ 'x', 'y' ], dataMap: { k1: 'x' } }
+```
+
+`taskCount` 个 request 名额用完且本轮已结算后,下一次 `request` 会开启新的一轮。
 
 ### 使用 createTaskOrder
 
-request 和 response 可以不按照顺序绑定.
+request 与数据严格按先进先出配对,不管哪一边先到。
 
 ```javascript
 import { createTaskOrder } from "async-task-mapping";
-const taskOrder = createTaskOrder({ order: false });
+const taskOrder = createTaskOrder();
 
 setTimeout(async () => {
-  // 这里返回一个Promise.resolve，你可以使用async/await或者.then.
   const data = await taskOrder;
   console.log("data1", data);
 }, 230);
@@ -97,8 +124,8 @@ setTimeout(async () => {
   const data = await taskOrder;
   console.log("data2", data);
 }, 500);
+
 setTimeout(() => {
-  resolve;
   taskOrder.pushResolve("resolve1");
 }, 200);
 setTimeout(() => {
@@ -109,24 +136,135 @@ setTimeout(() => {
 }, 400);
 ```
 
-你可以在不同函数中使用这些方法. 以上代码执行结果为:
+上面代码的结果是:
 
 ```javascript
 // time 230: data1 resolve1
 // time 500: data2 resolve2
+// resolve3 暂时没有 request 与它配对:
+// taskOrder.getStatus() -> { pendingRequests: 0, pendingResolve: 1 }
 ```
+
+#### createTaskOrder 实例化时传入的参数
+
+| 名称    | 说明                                                                 | 默认值      |
+| ------- | -------------------------------------------------------------------- | ----------- |
+| timeout | **每个** request 的超时毫秒数(> 0),超时的 request 会出队            | `undefined` |
+| signal  | `AbortSignal`,见 [abort 与 timeout](#abort-与-timeout)               | `undefined` |
 
 #### createTaskOrder 实例上的方法
 
-| 名称                     | 描述                                            | 返回值的数据结构                                                                                                                         |
-| ------------------------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| pushResolve              | 增加数据的方法                                  | --                                                                                                                                       |
-| clear                    | 清空所有的状态                                  | --                                                                                                                                       |
-| paused                   | 暂停任务                                        | --                                                                                                                                       |
-| running                  | 继续匹配任务                                    | --                                                                                                                                       |
-| getStatus                | 获取当前状态                                    | {<br>&nbsp;&nbsp; pendingRequests: 0 (未完成匹配的 request 数量), <br>&nbsp;&nbsp; pendingResponses: 0 (未完成匹配的 response 数量)<br>} |
-| getLastCompletedTask<br> | 获取最后一个 request 与 response 完成匹配的数据 | --                                                                                                                                       |
+| 名称                 | 说明                                                                              | 备注                                                      |
+| -------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| request              | 绑定一次 request                                                                  | --                                                        |
+| then\*               | 实例上的 `then` / `catch` / `finally`,每调用一次相当于 `request()` 一次          | --                                                        |
+| pushResolve          | 添加数据                                                                          | --                                                        |
+| pushReject           | 与队首尚未匹配的 request 配对,并让它以 `reason` reject                           | 不影响之后的 request                                      |
+| clear                | 清空所有状态:pending 的 request 以 `TaskClearedError` reject,未配对的数据被丢弃 | 见 [clear 会 reject](#clear-会-reject-pending-的-request) |
+| paused               | 暂停匹配                                                                          | `running()` 会一次性配对所有积压的数据                    |
+| running              | 恢复匹配                                                                          | --                                                        |
+| getStatus            | `{ pendingRequests, pendingResolve }`:未匹配的 request 数量与未匹配的数据数量    | --                                                        |
+| getLastCompletedTask | 最近一次成功匹配到的数据,没有时为 `null`                                         | `pushReject` 不会更新它                                   |
 
-### 开源协议
+```javascript
+const order = createTaskOrder();
+const first = order.request().catch((e) => `rejected: ${e.message}`);
+const second = order.request();
+order.pushReject(new Error("boom"));
+order.pushResolve("ok");
+console.log(await first, "/", await second);
+// rejected: boom / ok
+```
 
-[MIT](./LICENSE).
+### 使用 createStepTask
+
+并发池:调用即开始执行,同时运行的任务数不会超过 `limit`。
+
+```javascript
+import { createStepTask } from "async-task-mapping";
+
+const settled = await createStepTask(
+  [() => fetch("/a"), () => fetch("/b"), () => fetch("/c")],
+  {
+    limit: 2, // 必填,正整数
+    signal: controller.signal, // 可选
+    onComplete: (settled) => {}, // 可选
+  },
+);
+// settled 按任务下标排序,与 Promise.allSettled 一致:
+// [{ status: "fulfilled", value }, { status: "rejected", reason }, ...]
+```
+
+- 同步抛错的任务、不是函数的元素都会记为 `rejected`。返回的 Promise 本身只会因为 `onComplete` 抛错或 `abort` 而 reject。
+- `onComplete` 在全部任务结算后、返回的 Promise resolve 前调用一次;它抛错会使返回的 Promise 以该错误 reject。
+- `abort` 后不再启动新任务,返回的 Promise 以 `signal.reason` reject。已经在运行的任务不会被取消,需要你自己把 signal 传给它们。
+- `tasks` 不是数组抛 `TypeError`;`limit` 不是正整数抛 `TypeError` / `RangeError`。
+
+### 错误类型
+
+```javascript
+import { TaskClearedError, TaskTimeoutError } from "async-task-mapping";
+```
+
+| 错误               | 触发条件                                                  |
+| ------------------ | --------------------------------------------------------- |
+| `TaskClearedError` | request 还在 pending 时调用了 `clear()`                   |
+| `TaskTimeoutError` | 配置了 `timeout`,request 没有在时限内结算                 |
+| `RangeError`       | `request` / `pushResolve` 超限,或数值类参数不合法         |
+
+## 注意事项
+
+### thenable 会消耗名额
+
+对实例调用 `then`、`catch`、`finally` 或 `await`,每次都会调用一次 `request()`,各消耗一个 request 名额。`taskCount: 1` 时,同一轮里第二次 `await task` 会得到被 reject 的 `RangeError` Promise。
+
+`async` 函数里 `return` 实例会被隐式展开,相当于多一次 `await`。需要精确控制时请显式 `return task.request()`。
+
+### clear 会 reject pending 的 request
+
+`clear()`(以及 `abort`)会让所有 pending 的 request reject。**如果调用方没有 `catch`,这个 reject 就是 `unhandledRejection`,Node.js 默认会终止进程。**
+
+```javascript
+task.then(render); // 不安全:task.clear() 之后会以 TaskClearedError reject
+task.then(render).catch(() => {}); // 安全
+```
+
+### abort 与 timeout
+
+- `signal`:abort 后 pending 的 request 以 `signal.reason` reject,之后的 `request()` 同样 reject,`pushResolve` / `pushReject` 会被**静默忽略**(生产者不一定知道消费端已经放弃)。创建实例时 signal 已经 aborted 则立即生效。实例只对 `signal` 持有弱引用,长寿命的 signal 不会让实例无法被回收。
+- `createTaskList` 的 `timeout` 从一轮的首个 request 开始计时,针对整轮生效(有序、无序都一样)。**没有人在等就不计时**:无序列表在没有 request 时就用 `pushResolve` 填满数据,不会有定时器,之后迟到的 request 会立即拿到结果。
+- `createTaskOrder` 的 `timeout` 针对每个 request 单独计时。
+
+### pushReject
+
+- `createTaskList`:fail-fast。整轮失败,失败后 `pushResolve` / `pushReject` 都会抛错,直到调用 `clear()`。在 `paused()` 期间 `pushReject` 也是如此:`running()` 之后 request 才会 reject,而之后的 `pushResolve` 已经会抛错。
+- `createTaskOrder`:按先进先出与 request 配对,只会让一个 request reject。
+
+### paused
+
+`paused()` 只会推迟 `pushResolve` / `pushReject` 的分发。`clear`、`timeout`、`abort` 始终立即生效。
+
+## 从 1.x 迁移到 2.0
+
+| 1.x | 2.0 |
+| --- | --- |
+| 打包产物没有类型声明 | 仅 ESM 且自带类型,`engines.node >= 22.18`。使用 `import`(Node.js 22.18+ 也可以 `require()`) |
+| `requestCount` / `responseCount` 选项与 `pushResponse`(兼容层) | 已删除。请使用 `taskCount` / `resolveCount` 与 `pushResolve` |
+| `request` 超限时输出 `console.warn` 并返回 `undefined` | 返回被 reject 的 Promise(`RangeError`),不再输出日志 |
+| `pushResolve` 超限或顺序错误时**返回**错误字符串 | **抛出** `RangeError` / `Error` |
+| `clear()` 后 pending 的 request 永远悬挂 | 以 `TaskClearedError` reject,请加上 `catch`,见 [clear](#clear-会-reject-pending-的-request) |
+| `taskCount: 0` 等值被悄悄当成 `1` | `taskCount` / `resolveCount` / `timeout` / `signal` 会校验,非法值直接抛错 |
+| 无序列表在 fulfilled 之后再 `request` 返回裸数组 | 统一返回 `{ list, dataMap }` |
+| `dataMap` 在所有轮次间共享(`clear()` 不会重置) | 每一轮都有独立的 `list` / `dataMap` 快照 |
+| `createTaskOrder().getStatus()` 恒为 `0`,`running()` 只配对一条 | 返回真实数量,`running()` 会配对所有积压的数据 |
+| `createTaskOrder` 内有调试用的 `console.log` | 已移除 |
+| -- | 新增:`pushReject`、`timeout`、`signal`、`createStepTask`、`TaskClearedError`、`TaskTimeoutError` |
+
+补充说明:
+
+- `ordered` 默认值是 `true`,与 1.x 代码一致(1.x 的 README 误写成了 `false`)。如果你依赖「先 push 数据、后绑定 request」,请显式设置 `ordered: false`。
+- `createTaskOrder` 的 `getStatus()` 字段是 `pendingResolve`(1.x 的 README 误写成了 `pendingResponses`)。
+
+### License
+
+[MIT](https://github.com/TNT-03/async-task-mapping/blob/master/LICENSE).
