@@ -5,7 +5,7 @@ export interface TaskListOptions {
   taskCount?: number | undefined;
   /** 可 pushResolve 的次数,正整数,默认 1 */
   resolveCount?: number | undefined;
-  /** 超时毫秒数(> 0),从一轮任务进入 pending(首个 request)起计时,超时后本轮 reject */
+  /** 超时毫秒数(> 0 且 ≤ 2147483647),从一轮任务进入 pending(首个 request)起计时,超时后本轮 reject */
   timeout?: number | undefined;
   /**
    * 取消信号:abort 后等价于 `clear()`,但 pending 的 request 以 `signal.reason` reject。

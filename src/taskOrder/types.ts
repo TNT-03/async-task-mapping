@@ -1,5 +1,5 @@
 export interface TaskOrderOptions {
-  /** 每个 request 的超时毫秒数(> 0),超时后该 request 以 TaskTimeoutError reject 并出队 */
+  /** 每个 request 的超时毫秒数(> 0 且 ≤ 2147483647),超时后该 request 以 TaskTimeoutError reject 并出队 */
   timeout?: number | undefined;
   /**
    * 取消信号:abort 后等价于 `clear()`,但 pending 的 request 以 `signal.reason` reject。
