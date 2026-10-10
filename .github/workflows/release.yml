@@ -1,0 +1,106 @@
+name: Release
+
+# 推送 v* tag 触发发布。
+# 使用 npm Trusted Publishing(OIDC),不需要 NPM_TOKEN;
+# 首次发布前需要在 npmjs.com 的包设置里添加 Trusted Publisher:
+# owner TNT-03、repository async-task-mapping、workflow 文件名 release.yml
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # 创建 GitHub Release
+  id-token: write # OIDC 登录 npm 与生成 provenance
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 需要完整历史,才能判断 tag 是否在 master 上
+          fetch-depth: 0
+
+      - name: 校验 tag 指向的提交已在 master 上
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "tag $GITHUB_REF_NAME 指向的提交不在 master 上,拒绝发布" >&2
+            exit 1
+          fi
+
+      # 版本取自 package.json 的 packageManager 字段
+      - uses: pnpm/action-setup@v6
+
+      # Node 24 自带的 npm 满足 Trusted Publishing 的要求(>= 11.5.1)
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          # 发布 job 拥有较高权限,不使用缓存,避免缓存投毒
+          package-manager-cache: false
+
+      - name: 校验 tag 与 package.json 版本一致
+        id: version
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "tag $GITHUB_REF_NAME 与 package.json 版本 v$VERSION 不一致" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # 在发布之前就准备好 Release Notes:CHANGELOG 缺小节时直接失败,
+      # 避免出现「npm 已发布,但 GitHub Release 创建失败」导致重跑无法继续的状态。
+      # 放在 RUNNER_TEMP,不污染工作区,避免被 format:check 扫到
+      - name: 从 CHANGELOG 提取 Release Notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          awk -v v="$VERSION" '
+            $0 == "## " v { found = 1; next }
+            /^## / { found = 0 }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if [ ! -s "$RUNNER_TEMP/release-notes.md" ]; then
+            echo "CHANGELOG.md 中没有找到 ## $VERSION 小节" >&2
+            exit 1
+          fi
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run format:check
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run test
+      - run: pnpm run build
+      - run: pnpm run test:package
+
+      - name: 发布到 npm(带 provenance)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # 预发布版本(如 2.1.0-beta.1)发布到 next,不覆盖 latest
+          if [[ "$VERSION" == *-* ]]; then
+            npm publish --provenance --access public --tag next
+          else
+            npm publish --provenance --access public
+          fi
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          PRERELEASE=""
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE="--prerelease"
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --verify-tag \
+            $PRERELEASE
