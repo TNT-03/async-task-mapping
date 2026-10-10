@@ -77,8 +77,9 @@
 - [x] `npm test` 不再依赖先 build
 - [x] 统一包管理器,删除多余锁文件(`package-lock.json` 与 `yarn.lock` 并存)【需确认 Q12】
 - [x] dev 脚本依赖 rollup-plugin-serve/livereload(livereload 2021 后无更新),且 `demo/` 被 gitignore 且不存在,替换或删除【需确认 Q12】
-- [ ] 发布流程:`release` 直接 `npm publish`,引入 changesets + CHANGELOG + `prepublishOnly` + provenance
+- [x] 发布流程:`release` 直接 `npm publish`,引入 changesets + CHANGELOG + `prepublishOnly` + provenance
   - 已完成:changesets 配置、`prepublishOnly`、`release` 改为 `changeset publish`(`package.json` 已是 2.0.0,2.0.0 的 CHANGELOG 手写,之后的改动再用 changeset)
+  - provenance 由 §7 的 `release.yml` 在 tag 触发时通过 `npm publish --provenance` 完成
   - 未完成:provenance 需要 CI 的 OIDC,放到 §7
 
 ## 5. 测试(全部重写,Vitest,直接测 `src/`)
@@ -99,16 +100,20 @@
 - [x] devDependencies 全面刷新,移除 rollup*/babel*/jest/tslib 等不再需要的包
 
 ## 7. CI/CD
-- [ ] 新增 GitHub Actions:lint + typecheck + test(含类型、包导出、内存测试)+ build
-- [ ] Node 版本矩阵:22(Jod)、24(Krypton)为 LTS;26 目前为 Current,仅作非阻塞项;不再测试 Node 20 及以下
-- [ ] tag 触发自动发布(provenance)与 Release Notes
-- [ ] 启用 Dependabot
+- [x] 新增 GitHub Actions:lint + typecheck + test(含类型、包导出、内存测试)+ build
+  - `.github/workflows/ci.yml`;覆盖率只在 Node 24 上跑一次
+- [x] Node 版本矩阵:22(Jod)、24(Krypton)为 LTS;26 目前为 Current,仅作非阻塞项;不再测试 Node 20 及以下
+  - 同一个矩阵里用 `experimental` 标记 26 并设 `continue-on-error`,没有拆成独立 job
+- [x] tag 触发自动发布(provenance)与 Release Notes
+  - `.github/workflows/release.yml`,npm Trusted Publishing(OIDC);首次发布前需在 npmjs.com 给包配置 Trusted Publisher(owner `TNT-03`、repo `async-task-mapping`、workflow `release.yml`)
+- [x] 启用 Dependabot
+  - `.github/dependabot.yml`;TS 相关包分在同一组
 
 ## 8. 文档
 - [x] README 与实现保持一致:`ordered` 默认值、`getStatus` 字段名、示例输出里的 `time 200: request-2`(随 Q2/Q3 结果同步)
 - [x] 中英文 README 同步;补 TS 用法、Node 22+ 要求、引入方式(随 Q8)、1.x → 2.0 迁移指南(仅列经确认的 API 变更)
-- [x] 补新增 API(失败路径、StepTask)文档(badge 本轮不做,未勾选的部分见下一项)
-- [ ] 补 badge
+- [x] 补新增 API(失败路径、StepTask)文档
+- [x] 补 badge(npm 版本、CI、License、Node 版本)
 - [x] 删除 `previousVersions/` 文档(不再兼容旧版本)
 - [x] 补 CHANGELOG.md(2.0.0 手写)
-- [ ] 补 CONTRIBUTING.md
+- [x] 补 CONTRIBUTING.md

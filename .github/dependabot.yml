@@ -1,0 +1,33 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # typescript 是 TS 6 的别名包,@typescript/native 是 TS 7,
+      # 两者必须一起升级,避免 tsc 与 tsc6 的版本错位
+      typescript:
+        patterns:
+          - "typescript"
+          - "@typescript/*"
+          - "typescript-eslint"
+          - "@typescript-eslint/*"
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      github-actions:
+        patterns:
+          - "*"

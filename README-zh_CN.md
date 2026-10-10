@@ -1,5 +1,10 @@
 # async-task-mapping
 
+[![npm version](https://img.shields.io/npm/v/async-task-mapping)](https://www.npmjs.com/package/async-task-mapping)
+[![CI](https://github.com/TNT-03/async-task-mapping/actions/workflows/ci.yml/badge.svg)](https://github.com/TNT-03/async-task-mapping/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/async-task-mapping)](https://github.com/TNT-03/async-task-mapping/blob/master/LICENSE)
+[![node](https://img.shields.io/node/v/async-task-mapping)](https://www.npmjs.com/package/async-task-mapping)
+
 它可以做出 promise 无法完成的异步任务，可以无视发送和接收的顺序，允许绑定 pending 状态的异步任务，允许在多个函数内共同触发一个任务，并且支持生产者-消费者模式和订单模式。
 
 [English](./README.md) | 简体中文
@@ -264,6 +269,10 @@ task.then(render).catch(() => {}); // 安全
 
 - `ordered` 默认值是 `true`,与 1.x 代码一致(1.x 的 README 误写成了 `false`)。如果你依赖「先 push 数据、后绑定 request」,请显式设置 `ordered: false`。
 - `createTaskOrder` 的 `getStatus()` 字段是 `pendingResolve`(1.x 的 README 误写成了 `pendingResponses`)。
+
+### 参与贡献
+
+欢迎提 Issue 和 Pull Request,提交之前请先阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ### License
 
