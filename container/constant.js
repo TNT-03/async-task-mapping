@@ -4,4 +4,3 @@ export const RIVERS = 1;
 export const FLOOD = 0;
 export const RIVER_NETWORK = FLOOD | RIVERS;
 export const NOISE = ["constructor", "Symbol(Symbol.toStringTag)"];
-export const MOTHODS = [{ name: "pushResolve", oldName: "pushResponse" }];

@@ -1,6 +1,4 @@
 import SeaAnemones from "./seaAnemones";
-import { checkCallback, addOldMotheds } from "./../utils/index";
-
 class OrderedList extends SeaAnemones {
   constructor(taskCount) {
     const store = {
@@ -14,11 +12,9 @@ class OrderedList extends SeaAnemones {
     };
     super(store);
     this.#store = store;
-    addOldMotheds(this);
   }
   #store = null;
-  request(cb) {
-    checkCallback(cb);
+  request() {
     const { resolveList, taskCount, requestList } = this.#store;
     if (
       resolveList.length === taskCount[1] &&
