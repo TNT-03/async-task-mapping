@@ -2,7 +2,7 @@ import { NOISE } from "../container/constant.js";
 
 class Cell {
   request() {
-    // 占位
+    // seat
   }
   constructor() {
     const allMotheds = Reflect
