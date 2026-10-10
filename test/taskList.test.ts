@@ -141,6 +141,32 @@ describe("createTaskList 无序列表", () => {
     expect((await nextRound).list).toEqual([2]);
   });
 
+  it("一轮已结算且名额用完后,下一次 request 之前也能直接 pushResolve 开启新一轮", async () => {
+    const task = createTaskList<number>({ ordered: false });
+    task.pushResolve(1, "a");
+    expect(await task.request()).toEqual({ list: [1], dataMap: { a: 1 } });
+
+    // 此时本轮已结算且名额用完:先 push 不应抛 RangeError
+    expect(() => {
+      task.pushResolve(2, "b");
+    }).not.toThrow();
+    expect(await task.request()).toEqual({ list: [2], dataMap: { b: 2 } });
+  });
+
+  it("有序列表一轮结算后,多余的 pushResolve 仍按超限抛错,新一轮要靠 request 开启", async () => {
+    const task = createTaskList<number>();
+    const first = task.request();
+    task.pushResolve(1);
+    await first;
+
+    expect(() => {
+      task.pushResolve(2);
+    }).toThrow(RangeError);
+    const next = task.request();
+    task.pushResolve(3);
+    expect((await next).list).toEqual([3]);
+  });
+
   it("同名 key 后者覆盖前者", async () => {
     const task = createTaskList<string>({ ordered: false, resolveCount: 2 });
     task.pushResolve("old", "k");

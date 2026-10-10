@@ -1,5 +1,5 @@
 import { TaskClearedError, TaskTimeoutError } from "../errors";
-import { startTimer, watchAbort } from "../internal/lifecycle";
+import { startTimer, watchAbortWeakly } from "../internal/lifecycle";
 import { Thenable } from "../internal/thenable";
 import { Queue } from "./queue";
 import type { TaskOrder, TaskOrderStatus } from "./types";
@@ -32,13 +32,9 @@ export class TaskOrderImpl<T> extends Thenable<T> implements TaskOrder<T> {
     this.#timeout = config.timeout;
 
     if (config.signal) {
-      // 只持有弱引用,避免长寿命的 signal 把实例钉在内存里
-      const self = new WeakRef(this);
-      watchAbort(config.signal, (reason) => {
-        const target = self.deref();
-        if (target) {
-          target.#abort(reason);
-        }
+      // 只持有弱引用,避免长寿命的 signal 把实例钉在内存里;实例被回收后会摘除监听器
+      watchAbortWeakly(config.signal, this, (target, reason) => {
+        target.#abort(reason);
       });
     }
   }

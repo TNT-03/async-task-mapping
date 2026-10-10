@@ -1,5 +1,5 @@
 import { TaskClearedError, TaskTimeoutError } from "../errors";
-import { startTimer, watchAbort } from "../internal/lifecycle";
+import { startTimer, watchAbortWeakly } from "../internal/lifecycle";
 import { Thenable } from "../internal/thenable";
 import type { TaskList, TaskListResult, TaskListStatus } from "./types";
 
@@ -56,13 +56,9 @@ export class TaskListImpl<T>
     this.#timeout = config.timeout;
 
     if (config.signal) {
-      // 只持有弱引用,避免长寿命的 signal 把实例钉在内存里
-      const self = new WeakRef(this);
-      watchAbort(config.signal, (reason) => {
-        const target = self.deref();
-        if (target) {
-          target.#abort(reason);
-        }
+      // 只持有弱引用,避免长寿命的 signal 把实例钉在内存里;实例被回收后会摘除监听器
+      watchAbortWeakly(config.signal, this, (target, reason) => {
+        target.#abort(reason);
       });
     }
   }
@@ -151,6 +147,12 @@ export class TaskListImpl<T>
   }
 
   #assertCanPush(): void {
+    // 无序列表:上一轮已成功结算且名额用完时,此时的 push 属于新一轮,与 request() 保持一致。
+    // 有序列表必须先 request(),而 request() 会自行开启新一轮,所以这里仍按超限处理。
+    // 失败的一轮不在此列,仍需 clear() 或等下一次 request() 才会结束
+    if (!this.#ordered && this.#state === "fulfilled" && this.#isDrained()) {
+      this.#resetRound();
+    }
     if (this.#failure) {
       throw new Error(
         "The task list has been rejected, call clear() before pushing again",

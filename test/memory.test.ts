@@ -122,6 +122,33 @@ describe("内存释放", () => {
     ).toBe(true);
   });
 
+  it("实例被回收后,会摘除它留在长寿命 signal 上的监听器", async () => {
+    const listeners = new Set<() => void>();
+    // 只实现库用到的三个成员,方便统计监听器数量
+    const signal = {
+      aborted: false,
+      addEventListener: (_type: string, listener: () => void) => {
+        listeners.add(listener);
+      },
+      removeEventListener: (_type: string, listener: () => void) => {
+        listeners.delete(listener);
+      },
+    } as unknown as AbortSignal;
+
+    const refs = (() => [
+      new WeakRef(createTaskList({ signal })),
+      new WeakRef(createTaskOrder({ signal })),
+    ])();
+    expect(listeners.size).toBe(2);
+    expect(
+      await collectGarbage(() =>
+        refs.every((ref) => ref.deref() === undefined),
+      ),
+    ).toBe(true);
+    // FinalizationRegistry 的回调是异步触发的,同样需要轮询
+    expect(await collectGarbage(() => listeners.size === 0)).toBe(true);
+  });
+
   it("StepTask:完成后释放任务函数及其闭包", async () => {
     const results = await (async () => {
       const payload = { big: new Array<number>(1000).fill(1) };

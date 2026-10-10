@@ -1,5 +1,8 @@
 export interface TaskOrderOptions {
-  /** 每个 request 的超时毫秒数(> 0 且 ≤ 2147483647),超时后该 request 以 TaskTimeoutError reject 并出队 */
+  /**
+   * 每个 request 的超时毫秒数(> 0 且 ≤ 2147483647),超时后该 request 以 TaskTimeoutError reject 并出队。
+   * 不受 `paused()` 影响:暂停期间超时也会立即生效。
+   */
   timeout?: number | undefined;
   /**
    * 取消信号:abort 后等价于 `clear()`,但 pending 的 request 以 `signal.reason` reject。
@@ -30,11 +33,14 @@ export interface TaskOrder<T> extends PromiseLike<T> {
   /** 与队首尚未匹配的 request 配对,并让它以 `reason` reject */
   pushReject(reason: unknown): void;
   /**
-   * 清空所有状态:pending 的 request 以 `TaskClearedError` reject,未配对的数据被丢弃。
-   * 注意:如果调用方没有 `catch`(例如只写了 `order.then(cb)`),
+   * 清空队列:pending 的 request 以 `TaskClearedError` reject,未配对的数据被丢弃。
+   * 注意:`clear()` 只清空两个队列,**不会**重置 `getLastCompletedTask()` 的返回值,
+   * 也**不会**解除 `paused()` 的暂停状态(clear 之后新到的 request / 数据仍会被积压)。
+   * 另外,如果调用方没有 `catch`(例如只写了 `order.then(cb)`),
    * 这些 reject 会触发 `unhandledRejection`,Node.js 默认会因此终止进程。
    */
   clear(): void;
+  /** 暂停匹配:request / 数据仍会入队,`running()` 后一次性配对。`clear`、`timeout`、`abort` 不受影响 */
   paused(): void;
   running(): void;
   getStatus(): TaskOrderStatus;

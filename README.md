@@ -70,7 +70,7 @@ You can use these functions in different methods. All requests of a round settle
 | ordered      | Ordered list: every request must be bound before the first `pushResolve`, otherwise `pushResolve` throws     | `true`      |
 | taskCount    | Number of times `request` (including `then` / `catch` / `finally` / `await`) can be bound, positive integer | `1`         |
 | resolveCount | Number of times `pushResolve` can be called, positive integer                                                 | `1`         |
-| timeout      | Timeout in milliseconds (> 0). Counted from the first request of a round. Rejects with `TaskTimeoutError`     | `undefined` |
+| timeout      | Timeout in milliseconds (> 0 and ≤ 2147483647). Counted from the first request of a round. Rejects with `TaskTimeoutError`     | `undefined` |
 | signal       | An `AbortSignal`. See [abort](#abort-and-timeout)                                                             | `undefined` |
 
 Invalid values throw immediately: a non-number throws `TypeError`, a non-positive-integer `taskCount` / `resolveCount` or a non-positive `timeout` throws `RangeError`, and a `signal` that is not an `AbortSignal` throws `TypeError`.
@@ -110,7 +110,7 @@ console.log(await task.request());
 // { list: [ 'x', 'y' ], dataMap: { k1: 'x' } }
 ```
 
-Once all `taskCount` requests are used up and the round has settled, the next `request` starts a new round.
+Once all `taskCount` requests are used up and the round has settled, the next `request` starts a new round. For an unordered list (`ordered: false`), calling `pushResolve` in that situation also starts a new round. An ordered list must `request` first, and an extra `pushResolve` still throws `RangeError`.
 
 ### use createTaskOrder
 
@@ -154,7 +154,7 @@ The result of the above code is:
 
 | name    | description                                                                                    | default     |
 | ------- | ---------------------------------------------------------------------------------------------- | ----------- |
-| timeout | Timeout in milliseconds (> 0) of **each** request. A timed-out request leaves the queue        | `undefined` |
+| timeout | Timeout in milliseconds (> 0 and ≤ 2147483647) of **each** request. A timed-out request leaves the queue        | `undefined` |
 | signal  | An `AbortSignal`. See [abort](#abort-and-timeout)                                              | `undefined` |
 
 #### Methods on createTaskOrder Instances
@@ -165,7 +165,7 @@ The result of the above code is:
 | then\*               | `then` / `catch` / `finally` of the instance, each one calls `request()` once                  | --                                                                          |
 | pushResolve          | Add data                                                                                       | --                                                                          |
 | pushReject           | Pair with the first unmatched request and reject it with `reason`                              | Later requests are not affected                                             |
-| clear                | Clear all statuses. Pending requests reject with `TaskClearedError`, unmatched data is dropped | See [clear](#clear-rejects-pending-requests)                                |
+| clear                | Clear the queues. Pending requests reject with `TaskClearedError`, unmatched data is dropped   | Does **not** reset `getLastCompletedTask()` or `paused()`. See [clear](#clear-rejects-pending-requests) |
 | paused               | Pause matching                                                                                 | `running()` matches every piled-up pair at once                             |
 | running              | Resume matching                                                                                | --                                                                          |
 | getStatus            | `{ pendingRequests, pendingResolve }`: unmatched requests and unmatched data                   | --                                                                          |
@@ -189,7 +189,12 @@ A concurrency pool: it starts running when called, and never runs more than `lim
 import { createStepTask } from "async-task-mapping";
 
 const settled = await createStepTask(
-  [() => fetch("/a"), () => fetch("/b"), () => fetch("/c")],
+  [
+    // each task receives the signal: pass it to fetch so abort really cancels the request
+    (signal) => fetch("/a", { signal }),
+    (signal) => fetch("/b", { signal }),
+    (signal) => fetch("/c", { signal }),
+  ],
   {
     limit: 2, // required, positive integer
     signal: controller.signal, // optional
@@ -202,7 +207,7 @@ const settled = await createStepTask(
 
 - A task that throws synchronously, or is not a function, is recorded as `rejected`. The returned Promise itself only rejects for `onComplete` errors or `abort`.
 - `onComplete` is called once after all tasks settle and before the returned Promise resolves. If it throws, the returned Promise rejects with that error.
-- After `abort`, no new task is started and the returned Promise rejects with `signal.reason`. Tasks that are already running are not cancelled, you need to pass the signal into them yourself.
+- After `abort`, no new task is started and the returned Promise rejects with `signal.reason`. Tasks that are already running are not forcibly interrupted, but every task function receives the same `signal` (a signal that never aborts when no `signal` option is given). Pass it to `fetch` and similar APIs to really cancel them.
 - `tasks` that is not an array throws `TypeError`, and a `limit` that is not a positive integer throws `TypeError` / `RangeError`.
 
 ### Errors
@@ -225,6 +230,17 @@ import { TaskClearedError, TaskTimeoutError } from "async-task-mapping";
 
 An `async` function that `return`s the instance unwraps it, which counts as one more `await`. Return `task.request()` explicitly when you want to control it.
 
+**Risk: anything that unwraps a thenable silently consumes a slot**, including `Promise.resolve(task)`, `Promise.all([task])`, `Promise.race([...])`, and handing the instance to a third-party library or test framework that `await`s it. Once a slot is consumed by accident, the real consumer gets a `RangeError` (and `createTaskOrder` pairs the data with the wrong request). Always call `request()` explicitly in application code, and do not pass the instance around as if it were a plain Promise.
+
+### What clear does not reset
+
+`clear()` of `createTaskOrder` only empties the two queues (pending requests and unmatched data):
+
+- `getLastCompletedTask()` still returns the last matched data from before `clear()`.
+- If `paused()` was called earlier, the instance stays paused after `clear()`: new requests / data keep piling up until `running()`.
+
+If you need these to be reset, do it yourself (for example call `running()` after `clear()`, or create a new instance).
+
 ### clear rejects pending requests
 
 `clear()` (and `abort`) rejects every pending request. **If the caller has no `catch`, the rejection is an `unhandledRejection`, and Node.js terminates the process by default.**
@@ -236,18 +252,18 @@ task.then(render).catch(() => {}); // safe
 
 ### abort and timeout
 
-- `signal`: after it is aborted, pending requests reject with `signal.reason`, later `request()` calls reject with it as well, and `pushResolve` / `pushReject` are **silently ignored** (a producer is not always aware that the consumer has given up). A signal that is already aborted when the instance is created takes effect immediately. The instance only holds a weak reference to its `signal`, so a long-lived signal does not keep the instance alive.
+- `signal`: after it is aborted, pending requests reject with `signal.reason`, later `request()` calls reject with it as well, and `pushResolve` / `pushReject` are **silently ignored** (a producer is not always aware that the consumer has given up). A signal that is already aborted when the instance is created takes effect immediately. The instance only holds a weak reference to its `signal`, so a long-lived signal does not keep the instance alive, and the listener it left on the signal is removed automatically once the instance is garbage collected.
 - `timeout` of `createTaskList` starts at the first request of a round and applies to the whole round, ordered or not. **Nobody waiting means no timer**: in an unordered list that is already filled by `pushResolve` there is no timer, and a late request resolves immediately.
 - `timeout` of `createTaskOrder` is counted for each request separately.
 
 ### pushReject
 
-- `createTaskList`: fail-fast. The whole round fails, and `pushResolve` / `pushReject` on a failed round throw until `clear()` is called. This also holds when `pushReject` is called while `paused()`: the requests reject after `running()`, and a later `pushResolve` already throws.
+- `createTaskList`: fail-fast. The whole round fails (whether by `pushReject` or by `timeout`), later requests of the same round reject too, and `pushResolve` / `pushReject` throw. **Call `clear()` to recover immediately**; otherwise the next `request()` only starts a new round after all `taskCount` request slots are used up. This also holds when `pushReject` is called while `paused()`: the requests reject after `running()`, and a later `pushResolve` already throws.
 - `createTaskOrder`: paired with requests in FIFO order, only one request is rejected.
 
 ### paused
 
-`paused()` only defers the dispatching of `pushResolve` / `pushReject`. `clear`, `timeout` and `abort` always take effect immediately.
+`paused()` only defers the dispatching of `pushResolve` / `pushReject`. `clear`, `timeout` and `abort` always take effect immediately. **Note that `timeout` is not frozen by pausing**: the timer keeps running while paused and rejects with `TaskTimeoutError` when it fires. If a pause may last long, do not combine it with a short `timeout`.
 
 ## Migrating from 1.x to 2.0
 
