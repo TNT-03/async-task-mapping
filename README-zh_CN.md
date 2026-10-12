@@ -81,7 +81,7 @@ setTimeout(() => {
 | ----------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
 | request     | 绑定一次 request,返回 Promise                                                              | 超限时返回被 reject 的 Promise(`RangeError`)               |
 | then\*      | 实例上的 `then` / `catch` / `finally`,每调用一次相当于 `request()` 一次                   | `task.then(({ list, dataMap }) => {})`                     |
-| pushResolve | 添加数据:`pushResolve(data, name?)`,传了 `name` 就可以通过 `dataMap[name]` 取到            | 超限、顺序错误(有序列表)、本轮已 `pushReject` 时抛错      |
+| pushResolve | 添加数据:`pushResolve(data, name?)`,传了 `name`(空字符串也是合法 key)就可以通过 `dataMap[name]` 取到            | 超限、顺序错误(有序列表)、本轮已 `pushReject` 时抛错      |
 | pushReject  | 让本轮以 `reason` 失败,本轮 pending 的和之后的 request 都会 reject(fail-fast)             | 本轮已失败时抛错;有序列表还要求 request 已绑定完           |
 | clear       | 重置本轮,pending 的 request 以 `TaskClearedError` reject                                  | 见 [clear 会 reject](#clear-会-reject-pending-的-request)  |
 | paused      | 暂停分发:`pushResolve` / `pushReject` 仍会记录,但 request 不会结算                        | `clear`、`timeout`、`abort` 不受影响,始终立即生效          |

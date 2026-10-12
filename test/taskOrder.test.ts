@@ -133,6 +133,88 @@ describe("createTaskOrder 失败路径", () => {
     expect(vi.getTimerCount()).toBe(0);
     expect(await pending).toBe(1);
   });
+
+  it("timeout:取上限 2^31 - 1 时按原值计时,不会被当成 1ms 立即触发", async () => {
+    vi.useFakeTimers();
+    const order = createTaskOrder<number>({ timeout: 2_147_483_647 });
+    const pending = order.request();
+    const assertion = expect(pending).rejects.toBeInstanceOf(TaskTimeoutError);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await isSettled(pending)).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_147_483_645);
+    expect(await isSettled(pending)).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await assertion;
+    expect(order.getStatus().pendingRequests).toBe(0);
+  });
+});
+
+describe("createTaskOrder timeout 与 paused 的交互", () => {
+  it("paused 不会暂停计时:暂停期间到时的 request 出队并 reject", async () => {
+    vi.useFakeTimers();
+    const order = createTaskOrder<number>({ timeout: 100 });
+    order.paused();
+    const pending = expect(order.request()).rejects.toBeInstanceOf(
+      TaskTimeoutError,
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    await pending;
+    expect(order.getStatus().pendingRequests).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("已超时出队的 request 不会占用 paused 期间积压的数据,数据留给后续 request", async () => {
+    vi.useFakeTimers();
+    const order = createTaskOrder<number>({ timeout: 100 });
+    order.paused();
+    const timedOut = expect(order.request()).rejects.toBeInstanceOf(
+      TaskTimeoutError,
+    );
+    order.pushResolve(1);
+    await vi.advanceTimersByTimeAsync(100);
+    await timedOut;
+
+    order.running();
+    expect(order.getStatus()).toEqual({
+      pendingRequests: 0,
+      pendingResolve: 1,
+    });
+    expect(await order.request()).toBe(1);
+  });
+
+  it("只有部分 request 在暂停期间超时:running 后剩下的按序配对", async () => {
+    vi.useFakeTimers();
+    const order = createTaskOrder<number>({ timeout: 100 });
+    order.paused();
+    const first = expect(order.request()).rejects.toBeInstanceOf(
+      TaskTimeoutError,
+    );
+    await vi.advanceTimersByTimeAsync(50);
+    const second = order.request();
+    await vi.advanceTimersByTimeAsync(50);
+    await first;
+
+    order.pushResolve(1);
+    order.running();
+    expect(await second).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("超时前 running 完成配对:正常 resolve,并取消定时器", async () => {
+    vi.useFakeTimers();
+    const order = createTaskOrder<number>({ timeout: 100 });
+    order.paused();
+    const pending = order.request();
+    order.pushResolve(1);
+    expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(99);
+    order.running();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(await pending).toBe(1);
+  });
 });
 
 describe("createTaskOrder paused / running", () => {

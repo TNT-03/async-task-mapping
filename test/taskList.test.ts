@@ -183,6 +183,36 @@ describe("createTaskList 无序列表", () => {
     expect(Object.getPrototypeOf(dataMap)).toBe(Object.prototype);
     expect(Object.keys(dataMap)).toEqual(["__proto__"]);
   });
+
+  it('空字符串是合法的 name,数据会进入 dataMap[""]', async () => {
+    const task = createTaskList<string>({ ordered: false });
+    task.pushResolve("a", "");
+    const { list, dataMap } = await task.request();
+    expect(list).toEqual(["a"]);
+    expect(dataMap).toEqual({ "": "a" });
+  });
+
+  it("不传 name 或传 undefined 只进 list,空字符串 name 与之并存", async () => {
+    const task = createTaskList<string>({ ordered: false, resolveCount: 4 });
+    task.pushResolve("a");
+    task.pushResolve("b", undefined);
+    task.pushResolve("c", "");
+    task.pushResolve("d", "d");
+    const { list, dataMap } = await task.request();
+    expect(list).toEqual(["a", "b", "c", "d"]);
+    expect(dataMap).toEqual({ "": "c", d: "d" });
+  });
+
+  it("空字符串 name 同样遵循同名覆盖,且不会泄漏到下一轮", async () => {
+    const task = createTaskList<string>({ ordered: false, resolveCount: 2 });
+    task.pushResolve("old", "");
+    task.pushResolve("new", "");
+    expect((await task.request()).dataMap).toEqual({ "": "new" });
+
+    task.pushResolve("x", "k");
+    task.pushResolve("y", "k");
+    expect((await task.request()).dataMap).toEqual({ k: "y" });
+  });
 });
 
 describe("createTaskList 失败路径", () => {
@@ -276,6 +306,104 @@ describe("createTaskList 失败路径", () => {
     expect(() => {
       task.pushResolve(2);
     }).toThrow("rejected");
+  });
+
+  it("timeout:取上限 2^31 - 1 时按原值计时,不会被当成 1ms 立即触发", async () => {
+    vi.useFakeTimers();
+    const task = createTaskList<number>({ timeout: 2_147_483_647 });
+    const pending = task.request();
+    const assertion = expect(pending).rejects.toBeInstanceOf(TaskTimeoutError);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await isSettled(pending)).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_147_483_645);
+    expect(await isSettled(pending)).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await assertion;
+  });
+});
+
+describe("createTaskList timeout 与 paused 的交互", () => {
+  it("paused 不会暂停计时:暂停期间到时,本轮照常以 TaskTimeoutError rejected", async () => {
+    vi.useFakeTimers();
+    const task = createTaskList<number>({
+      ordered: false,
+      taskCount: 2,
+      timeout: 100,
+    });
+    const pending = expect(task.request()).rejects.toBeInstanceOf(
+      TaskTimeoutError,
+    );
+    task.paused();
+    await vi.advanceTimersByTimeAsync(100);
+    await pending;
+    expect(vi.getTimerCount()).toBe(0);
+
+    expect(() => {
+      task.pushResolve(1);
+    }).toThrow("rejected");
+    // running 之后状态不变,失败的一轮仍需 clear() 才会结束
+    task.running();
+    await expect(task.request()).rejects.toBeInstanceOf(TaskTimeoutError);
+  });
+
+  it("paused 期间数据已凑齐但超时先到:running 后仍然是超时失败", async () => {
+    vi.useFakeTimers();
+    const task = createTaskList<number>({
+      ordered: false,
+      taskCount: 2,
+      timeout: 100,
+    });
+    const pending = expect(task.request()).rejects.toBeInstanceOf(
+      TaskTimeoutError,
+    );
+    task.paused();
+    task.pushResolve(1);
+    await vi.advanceTimersByTimeAsync(100);
+    await pending;
+
+    task.running();
+    await expect(task.request()).rejects.toBeInstanceOf(TaskTimeoutError);
+  });
+
+  it("超时前 running 完成结算:正常 fulfilled,并取消定时器", async () => {
+    vi.useFakeTimers();
+    const task = createTaskList<number>({
+      ordered: false,
+      taskCount: 2,
+      timeout: 100,
+    });
+    const pending = task.request();
+    task.paused();
+    task.pushResolve(1);
+    expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(99);
+    task.running();
+    expect(vi.getTimerCount()).toBe(0);
+    expect((await pending).list).toEqual([1]);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect((await task.request()).list).toEqual([1]);
+  });
+
+  it("超时后 clear() 可以恢复,paused 状态不受影响", async () => {
+    vi.useFakeTimers();
+    const task = createTaskList<number>({ ordered: false, timeout: 100 });
+    const timedOut = expect(task.request()).rejects.toBeInstanceOf(
+      TaskTimeoutError,
+    );
+    task.paused();
+    await vi.advanceTimersByTimeAsync(100);
+    await timedOut;
+
+    task.clear();
+    const next = task.request();
+    task.pushResolve(2);
+    expect(await isSettled(next)).toBe(false);
+    task.running();
+    expect((await next).list).toEqual([2]);
   });
 });
 
