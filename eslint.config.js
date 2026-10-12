@@ -25,6 +25,7 @@ export default defineConfig(
     rules: {
       // reject 的原因来自使用者(pushReject / signal.reason),不一定是 Error
       "@typescript-eslint/prefer-promise-reject-errors": "off",
+      "no-console": "error",
       "no-restricted-globals": [
         "error",
         ...[

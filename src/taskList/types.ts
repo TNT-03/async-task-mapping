@@ -47,6 +47,7 @@ export interface TaskList<T> extends PromiseLike<TaskListResult<T>> {
   finally(onfinally?: (() => void) | null): Promise<TaskListResult<T>>;
   /**
    * 添加数据;超限、顺序错误、本轮已失败时同步抛错。
+   * 传入 `name`(包括空字符串)时,数据可通过 `dataMap[name]` 取到;不传或传 `undefined` 则只进 `list`。
    * 实例已 abort 时静默忽略。
    */
   pushResolve(data: T, name?: string): void;

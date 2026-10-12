@@ -101,7 +101,7 @@ export class TaskListImpl<T>
       throw new RangeError("Too many pushResolve bound");
     }
     this.#values.push(data);
-    if (name) {
+    if (name !== undefined) {
       this.#named.set(name, data);
     }
     this.#flush();
