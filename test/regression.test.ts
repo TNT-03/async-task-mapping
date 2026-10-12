@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   TaskClearedError,
@@ -7,25 +5,9 @@ import {
   createTaskList,
   createTaskOrder,
 } from "../src/index";
-function listSourceFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name);
-    return entry.isDirectory() ? listSourceFiles(path) : [path];
-  });
-}
-
 describe("旧实现缺陷的回归", () => {
-  it("源码不包含 console 调用,也不直接访问 window / navigator / process", () => {
-    const sourceDir = join(import.meta.dirname, "../src");
-    for (const file of listSourceFiles(sourceDir)) {
-      const content = readFileSync(file, "utf8");
-      expect(content, file).not.toMatch(/\bconsole\./);
-      expect(content, file).not.toMatch(/\bwindow\b/);
-      expect(content, file).not.toMatch(/\bnavigator\b/);
-      expect(content, file).not.toMatch(/\bprocess\./);
-    }
-  });
-
+  // 源码不得使用 console / window / navigator / process 等全局,由 eslint.config.js 的
+  // no-console 与 no-restricted-globals 在 lint 阶段保证
   it("所有路径(含超限、clear)都不向 console 输出", async () => {
     const spies = (["log", "warn", "error", "info"] as const).map((method) =>
       vi.spyOn(console, method).mockImplementation(() => undefined),

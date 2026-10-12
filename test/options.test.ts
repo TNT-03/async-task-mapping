@@ -45,6 +45,17 @@ describe("createTaskList 入参校验", () => {
     expect(() => createTaskOrder({ timeout: 2_147_483_647 })).not.toThrow();
   });
 
+  it("超过上限的小数同样抛 RangeError,小于 1 的小数毫秒允许创建", () => {
+    expect(() => createTaskList({ timeout: 2_147_483_647.5 })).toThrow(
+      RangeError,
+    );
+    expect(() => createTaskOrder({ timeout: 2_147_483_647.5 })).toThrow(
+      RangeError,
+    );
+    expect(() => createTaskList({ timeout: 0.5 })).not.toThrow();
+    expect(() => createTaskOrder({ timeout: 0.5 })).not.toThrow();
+  });
+
   it("timeout / signal 类型不对时抛 TypeError", () => {
     expect(() => createTaskList({ timeout: bad("10") })).toThrow(TypeError);
     expect(() => createTaskList({ signal: bad({}) })).toThrow(TypeError);
