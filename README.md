@@ -188,6 +188,8 @@ A concurrency pool: it starts running when called, and never runs more than `lim
 ```javascript
 import { createStepTask } from "async-task-mapping";
 
+const controller = new AbortController();
+
 const settled = await createStepTask(
   [
     // each task receives the signal: pass it to fetch so abort really cancels the request
@@ -208,7 +210,122 @@ const settled = await createStepTask(
 - A task that throws synchronously, or is not a function, is recorded as `rejected`. The returned Promise itself only rejects for `onComplete` errors or `abort`.
 - `onComplete` is called once after all tasks settle and before the returned Promise resolves. If it throws, the returned Promise rejects with that error.
 - After `abort`, no new task is started and the returned Promise rejects with `signal.reason`. Tasks that are already running are not forcibly interrupted, but every task function receives the same `signal` (a signal that never aborts when no `signal` option is given). Pass it to `fetch` and similar APIs to really cancel them.
-- `tasks` that is not an array throws `TypeError`, and a `limit` that is not a positive integer throws `TypeError` / `RangeError`.
+- `onComplete` is **not** called after `abort`.
+- Invalid arguments **throw synchronously** instead of returning a rejected Promise: `tasks` that is not an array throws `TypeError`, a `limit` that is not a positive integer throws `TypeError` / `RangeError`, and a `signal` that is not an `AbortSignal` throws `TypeError`. Wrap the call in `try` if the arguments come from user input.
+
+### Failure paths: pushReject, timeout and signal
+
+`pushReject`, `timeout` and `signal` make `.catch` / `.finally` actually useful. Always `catch` the rejection, see [clear](#clear-rejects-pending-requests).
+
+**pushReject**: fail the request from the producer side.
+
+```javascript
+import { createTaskList } from "async-task-mapping";
+
+const task = createTaskList();
+const pending = task.request();
+
+task.pushReject(new Error("boom"));
+
+await pending.catch((error) => console.log(error.message));
+// boom
+// The round has failed: pushResolve / pushReject now throw.
+// Call task.clear() to recover immediately, see the pushReject section below.
+```
+
+For `createTaskOrder`, `pushReject` only rejects the first unmatched request (see the example in the `createTaskOrder` section).
+
+**timeout**: reject with `TaskTimeoutError` when nothing arrives in time.
+
+```javascript
+import {
+  createTaskList,
+  createTaskOrder,
+  TaskTimeoutError,
+} from "async-task-mapping";
+
+// createTaskList: counted once per round, from the first request
+const task = createTaskList({ timeout: 1000 });
+try {
+  await task; // nobody calls task.pushResolve within 1 second
+} catch (error) {
+  console.log(error instanceof TaskTimeoutError); // true
+}
+
+// createTaskOrder: counted for each request separately,
+// a timed-out request leaves the queue and does not affect the others
+const order = createTaskOrder({ timeout: 1000 });
+await order.request().catch((error) => error instanceof TaskTimeoutError); // true
+```
+
+**signal**: cancel from outside with an `AbortSignal`.
+
+```javascript
+import { createTaskOrder } from "async-task-mapping";
+
+const controller = new AbortController();
+const order = createTaskOrder({ signal: controller.signal });
+
+const pending = order.request();
+controller.abort(new Error("page closed"));
+
+await pending.catch((error) => console.log(error.message));
+// page closed
+
+// After abort the instance is no longer usable:
+await order.request().catch((error) => console.log(error.message)); // page closed
+order.pushResolve("x"); // silently ignored, does not throw
+```
+
+`createTaskList` accepts `timeout` and `signal` in the same way. Details (such as how `timeout` interacts with `paused()`) are in [abort and timeout](#abort-and-timeout) and [paused](#paused).
+
+### TypeScript
+
+Type declarations are built in and no `@types` package is needed. Both factories take the data type as a generic parameter (default `unknown`):
+
+```typescript
+import {
+  createStepTask,
+  createTaskList,
+  createTaskOrder,
+  type StepTaskFunction,
+  type TaskList,
+  type TaskListResult,
+  type TaskOrder,
+} from "async-task-mapping";
+
+const list: TaskList<string> = createTaskList<string>();
+const pending = list.request(); // an ordered list must bind the request first
+list.pushResolve("a", "k"); // list.pushResolve(1) is a compile error, data must be a string
+const result: TaskListResult<string> = await pending;
+console.log(result.list[0], result.dataMap.k);
+// result.list: readonly string[]
+// result.dataMap: Readonly<Record<string, string>>
+
+const order: TaskOrder<number> = createTaskOrder<number>();
+const next = order.request();
+order.pushResolve(1);
+const value = await next; // number
+const last = order.getLastCompletedTask(); // number | null
+
+// createStepTask<T>: every task returns T (or a PromiseLike<T>)
+const tasks: StepTaskFunction<number>[] = [() => 1, async () => 2];
+const settled = await createStepTask(tasks, { limit: 2 });
+// settled: PromiseSettledResult<number>[]
+```
+
+Exported types:
+
+| type                                    | description                                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `TaskList<T>`, `TaskOrder<T>`           | Instance types returned by `createTaskList<T>()` / `createTaskOrder<T>()`. Both are `PromiseLike` |
+| `TaskListOptions`, `TaskOrderOptions`   | Options of the factories, all optional                                                           |
+| `TaskListResult<T>`                     | `{ readonly list: readonly T[]; readonly dataMap: Readonly<Record<string, T>> }`                  |
+| `TaskListStatus`, `TaskOrderStatus`     | Return types of `getStatus()`                                                                    |
+| `StepTaskFunction<T>`, `StepTaskOptions<T>` | Task function `(signal: AbortSignal) => PromiseLike<T> \| T` and options of `createStepTask`  |
+| `TaskClearedError`, `TaskTimeoutError`  | Error classes (values, not only types), usable with `instanceof`                                 |
+
+The `reason` of a rejection is typed as `unknown`, so narrow it before use: `if (error instanceof TaskTimeoutError) { ... }`.
 
 ### Errors
 
@@ -216,11 +333,23 @@ const settled = await createStepTask(
 import { TaskClearedError, TaskTimeoutError } from "async-task-mapping";
 ```
 
-| error              | when                                                                  |
-| ------------------ | --------------------------------------------------------------------- |
-| `TaskClearedError` | `clear()` was called while the request was pending                    |
-| `TaskTimeoutError` | `timeout` was configured and the request did not settle in time       |
-| `RangeError`       | `request` / `pushResolve` over the limit, or an invalid numeric option |
+Errors that **reject** the returned Promise:
+
+| error              | when                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `TaskClearedError` | `clear()` was called while the request was pending                                        |
+| `TaskTimeoutError` | `timeout` was configured and the request did not settle in time                           |
+| `RangeError`       | `request` over the limit (`createTaskList`)                                               |
+| `signal.reason`    | The `signal` was aborted: pending and later requests reject with it                       |
+| the `reason` of `pushReject` | Whatever you passed to `pushReject(reason)`                                      |
+
+Errors that are **thrown synchronously**:
+
+| error        | when                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `RangeError` | `pushResolve` over the limit, or `taskCount` / `resolveCount` / `timeout` / `limit` is out of range                  |
+| `TypeError`  | A numeric option is not a number, `signal` is not an `AbortSignal`, or `tasks` of `createStepTask` is not an array   |
+| `Error`      | `createTaskList`: `pushResolve` / `pushReject` in the wrong order (ordered list, requests not all bound yet), or `pushResolve` / `pushReject` after the round has failed |
 
 ## Notes
 
@@ -286,10 +415,10 @@ Notes:
 - `ordered` defaults to `true`, as it did in the 1.x code (the 1.x README said `false` by mistake). If you rely on pushing data before binding requests, set `ordered: false` explicitly.
 - `getStatus()` of `createTaskOrder` uses `pendingResolve` (the 1.x README wrote `pendingResponses` by mistake).
 
-### Contributing
+## Contributing
 
 Issues and pull requests are welcome, please read [CONTRIBUTING.md](https://github.com/TNT-03/async-task-mapping/blob/master/CONTRIBUTING.md) first (written in Chinese).
 
-### License
+## License
 
 [MIT](https://github.com/TNT-03/async-task-mapping/blob/master/LICENSE).
