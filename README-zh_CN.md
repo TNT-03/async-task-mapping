@@ -188,6 +188,8 @@ console.log(await first, "/", await second);
 ```javascript
 import { createStepTask } from "async-task-mapping";
 
+const controller = new AbortController();
+
 const settled = await createStepTask(
   [
     // 任务函数会收到 signal,把它交给 fetch,abort 时就能真正取消请求
@@ -208,7 +210,122 @@ const settled = await createStepTask(
 - 同步抛错的任务、不是函数的元素都会记为 `rejected`。返回的 Promise 本身只会因为 `onComplete` 抛错或 `abort` 而 reject。
 - `onComplete` 在全部任务结算后、返回的 Promise resolve 前调用一次;它抛错会使返回的 Promise 以该错误 reject。
 - `abort` 后不再启动新任务,返回的 Promise 以 `signal.reason` reject。已经在运行的任务不会被强制中断,但每个任务函数都会收到同一个 `signal`(没有传入 `signal` 时是一个永不 abort 的信号),把它交给 `fetch` 等 API 即可真正取消。
-- `tasks` 不是数组抛 `TypeError`;`limit` 不是正整数抛 `TypeError` / `RangeError`。
+- `abort` 之后**不会**调用 `onComplete`。
+- 参数非法时是**同步抛错**,不会返回被 reject 的 Promise:`tasks` 不是数组抛 `TypeError`;`limit` 不是正整数抛 `TypeError` / `RangeError`;`signal` 不是 `AbortSignal` 抛 `TypeError`。如果参数来自用户输入,请在调用处加 `try`。
+
+### 失败路径:pushReject、timeout 与 signal
+
+`pushReject`、`timeout`、`signal` 让 `.catch` / `.finally` 真正可用。请务必处理 reject,见 [clear 会 reject](#clear-会-reject-pending-的-request)。
+
+**pushReject**:由生产者一侧让 request 失败。
+
+```javascript
+import { createTaskList } from "async-task-mapping";
+
+const task = createTaskList();
+const pending = task.request();
+
+task.pushReject(new Error("boom"));
+
+await pending.catch((error) => console.log(error.message));
+// boom
+// 本轮已失败:之后的 pushResolve / pushReject 都会抛错。
+// 想立即恢复请调用 task.clear(),详见下方「pushReject」一节。
+```
+
+`createTaskOrder` 的 `pushReject` 只会让队首尚未匹配的一个 request reject,示例见 `createTaskOrder` 一节。
+
+**timeout**:在时限内没有等到结果,就以 `TaskTimeoutError` reject。
+
+```javascript
+import {
+  createTaskList,
+  createTaskOrder,
+  TaskTimeoutError,
+} from "async-task-mapping";
+
+// createTaskList:每一轮只计时一次,从首个 request 开始
+const task = createTaskList({ timeout: 1000 });
+try {
+  await task; // 1 秒内没有人调用 task.pushResolve
+} catch (error) {
+  console.log(error instanceof TaskTimeoutError); // true
+}
+
+// createTaskOrder:每个 request 单独计时,
+// 超时的 request 会出队,不影响其他 request
+const order = createTaskOrder({ timeout: 1000 });
+await order.request().catch((error) => error instanceof TaskTimeoutError); // true
+```
+
+**signal**:用 `AbortSignal` 从外部取消。
+
+```javascript
+import { createTaskOrder } from "async-task-mapping";
+
+const controller = new AbortController();
+const order = createTaskOrder({ signal: controller.signal });
+
+const pending = order.request();
+controller.abort(new Error("page closed"));
+
+await pending.catch((error) => console.log(error.message));
+// page closed
+
+// abort 之后实例不再可用:
+await order.request().catch((error) => console.log(error.message)); // page closed
+order.pushResolve("x"); // 被静默忽略,不会抛错
+```
+
+`createTaskList` 以同样的方式接收 `timeout` 和 `signal`。更多细节(例如 `timeout` 与 `paused()` 的关系)见 [abort 与 timeout](#abort-与-timeout) 和 [paused](#paused)。
+
+### TypeScript
+
+自带类型声明,不需要额外安装 `@types` 包。两个工厂函数都通过泛型参数指定数据类型(默认 `unknown`):
+
+```typescript
+import {
+  createStepTask,
+  createTaskList,
+  createTaskOrder,
+  type StepTaskFunction,
+  type TaskList,
+  type TaskListResult,
+  type TaskOrder,
+} from "async-task-mapping";
+
+const list: TaskList<string> = createTaskList<string>();
+const pending = list.request(); // 有序列表必须先绑定 request
+list.pushResolve("a", "k"); // list.pushResolve(1) 会编译报错,数据必须是 string
+const result: TaskListResult<string> = await pending;
+console.log(result.list[0], result.dataMap.k);
+// result.list: readonly string[]
+// result.dataMap: Readonly<Record<string, string>>
+
+const order: TaskOrder<number> = createTaskOrder<number>();
+const next = order.request();
+order.pushResolve(1);
+const value = await next; // number
+const last = order.getLastCompletedTask(); // number | null
+
+// createStepTask<T>:每个任务返回 T(或 PromiseLike<T>)
+const tasks: StepTaskFunction<number>[] = [() => 1, async () => 2];
+const settled = await createStepTask(tasks, { limit: 2 });
+// settled: PromiseSettledResult<number>[]
+```
+
+导出的类型:
+
+| 类型                                        | 说明                                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `TaskList<T>`、`TaskOrder<T>`               | `createTaskList<T>()` / `createTaskOrder<T>()` 返回的实例类型,都是 `PromiseLike`       |
+| `TaskListOptions`、`TaskOrderOptions`       | 工厂函数的参数类型,所有字段均可选                                                     |
+| `TaskListResult<T>`                         | `{ readonly list: readonly T[]; readonly dataMap: Readonly<Record<string, T>> }`       |
+| `TaskListStatus`、`TaskOrderStatus`         | `getStatus()` 的返回类型                                                               |
+| `StepTaskFunction<T>`、`StepTaskOptions<T>` | 任务函数 `(signal: AbortSignal) => PromiseLike<T> \| T` 与 `createStepTask` 的参数类型 |
+| `TaskClearedError`、`TaskTimeoutError`      | 错误类(是值,不只是类型),可配合 `instanceof` 使用                                    |
+
+reject 的 `reason` 类型是 `unknown`,使用前请先收窄:`if (error instanceof TaskTimeoutError) { ... }`。
 
 ### 错误类型
 
@@ -216,11 +333,23 @@ const settled = await createStepTask(
 import { TaskClearedError, TaskTimeoutError } from "async-task-mapping";
 ```
 
-| 错误               | 触发条件                                                  |
-| ------------------ | --------------------------------------------------------- |
-| `TaskClearedError` | request 还在 pending 时调用了 `clear()`                   |
-| `TaskTimeoutError` | 配置了 `timeout`,request 没有在时限内结算                 |
-| `RangeError`       | `request` / `pushResolve` 超限,或数值类参数不合法         |
+会让返回的 Promise **reject** 的错误:
+
+| 错误                       | 触发条件                                                  |
+| -------------------------- | --------------------------------------------------------- |
+| `TaskClearedError`         | request 还在 pending 时调用了 `clear()`                   |
+| `TaskTimeoutError`         | 配置了 `timeout`,request 没有在时限内结算                 |
+| `RangeError`               | `request` 超限(`createTaskList`)                          |
+| `signal.reason`            | `signal` 被 abort:pending 的和之后的 request 都以它 reject |
+| `pushReject` 传入的 `reason` | 你传给 `pushReject(reason)` 的值                          |
+
+会被**同步抛出**的错误:
+
+| 错误         | 触发条件                                                                                                   |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| `RangeError` | `pushResolve` 超限,或 `taskCount` / `resolveCount` / `timeout` / `limit` 超出范围                          |
+| `TypeError`  | 数值类参数不是 number、`signal` 不是 `AbortSignal`、`createStepTask` 的 `tasks` 不是数组                   |
+| `Error`      | `createTaskList`:`pushResolve` / `pushReject` 顺序错误(有序列表,request 还没绑定完),或本轮已失败后再 `pushResolve` / `pushReject` |
 
 ## 注意事项
 
@@ -286,10 +415,10 @@ task.then(render).catch(() => {}); // 安全
 - `ordered` 默认值是 `true`,与 1.x 代码一致(1.x 的 README 误写成了 `false`)。如果你依赖「先 push 数据、后绑定 request」,请显式设置 `ordered: false`。
 - `createTaskOrder` 的 `getStatus()` 字段是 `pendingResolve`(1.x 的 README 误写成了 `pendingResponses`)。
 
-### 参与贡献
+## 参与贡献
 
 欢迎提 Issue 和 Pull Request,提交之前请先阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
-### License
+## License
 
 [MIT](https://github.com/TNT-03/async-task-mapping/blob/master/LICENSE).
