@@ -71,7 +71,7 @@ setTimeout(() => {
 | taskCount    | 可以绑定 request 的次数(`request` / `then` / `catch` / `finally` / `await` 都算一次),正整数            | `1`         |
 | resolveCount | 可以 `pushResolve` 的次数,正整数                                                                       | `1`         |
 | timeout      | 超时毫秒数(> 0 且 ≤ 2147483647),从一轮的首个 request 起计时,超时后本轮以 `TaskTimeoutError` reject                    | `undefined` |
-| signal       | `AbortSignal`,见 [abort 与 timeout](#abort-与-timeout)                                                 | `undefined` |
+| signal       | `AbortSignal`(或任何 `AbortSignalLike`),见 [abort 与 timeout](#abort-与-timeout)                                                 | `undefined` |
 
 非法值会立即抛错:类型不是 number 抛 `TypeError`;`taskCount` / `resolveCount` 不是正整数、`timeout` 不是正数抛 `RangeError`;`signal` 不是 `AbortSignal` 抛 `TypeError`。
 
@@ -155,7 +155,7 @@ setTimeout(() => {
 | 名称    | 说明                                                                 | 默认值      |
 | ------- | -------------------------------------------------------------------- | ----------- |
 | timeout | **每个** request 的超时毫秒数(> 0 且 ≤ 2147483647),超时的 request 会出队            | `undefined` |
-| signal  | `AbortSignal`,见 [abort 与 timeout](#abort-与-timeout)               | `undefined` |
+| signal  | `AbortSignal`(或任何 `AbortSignalLike`),见 [abort 与 timeout](#abort-与-timeout)               | `undefined` |
 
 #### createTaskOrder 实例上的方法
 
@@ -323,6 +323,7 @@ const settled = await createStepTask(tasks, { limit: 2 });
 | `TaskListResult<T>`                         | `{ readonly list: readonly T[]; readonly dataMap: Readonly<Record<string, T>> }`       |
 | `TaskListStatus`、`TaskOrderStatus`         | `getStatus()` 的返回类型                                                               |
 | `StepTaskFunction<T>`、`StepTaskOptions<T>` | 任务函数 `(signal: AbortSignal) => PromiseLike<T> \| T` 与 `createStepTask` 的参数类型 |
+| `AbortSignalLike`                           | 工厂函数接受的 `signal` 最小结构:`aborted`、`addEventListener`、`removeEventListener`、`reason`。真实的 `AbortSignal` 可直接传入;自定义对象没有 `reason` 时,abort 后使用默认的 `AbortError` |
 | `TaskClearedError`、`TaskTimeoutError`      | 错误类(是值,不只是类型),可配合 `instanceof` 使用                                    |
 
 reject 的 `reason` 类型是 `unknown`,使用前请先收窄:`if (error instanceof TaskTimeoutError) { ... }`。
@@ -340,7 +341,7 @@ import { TaskClearedError, TaskTimeoutError } from "async-task-mapping";
 | `TaskClearedError`         | request 还在 pending 时调用了 `clear()`                   |
 | `TaskTimeoutError`         | 配置了 `timeout`,request 没有在时限内结算                 |
 | `RangeError`               | `request` 超限(`createTaskList`)                          |
-| `signal.reason`            | `signal` 被 abort:pending 的和之后的 request 都以它 reject |
+| `signal.reason`            | `signal` 被 abort:pending 的和之后的 request 都以它 reject(信号没有 `reason` 时是 `AbortError`) |
 | `pushReject` 传入的 `reason` | 你传给 `pushReject(reason)` 的值                          |
 
 会被**同步抛出**的错误:

@@ -1,3 +1,5 @@
+import type { AbortSignalLike } from "../types";
+
 export interface TaskListOptions {
   /** 是否有序:有序列表必须先绑定完所有 request,才能 pushResolve。默认 `true` */
   ordered?: boolean | undefined;
@@ -15,7 +17,7 @@ export interface TaskListOptions {
    * 取消信号:abort 后等价于 `clear()`,但 pending 的 request 以 `signal.reason` reject。
    * 实例此后失效:之后的 `request()` 同样 reject,`pushResolve` / `pushReject` 被静默忽略。
    */
-  signal?: AbortSignal | undefined;
+  signal?: AbortSignalLike | undefined;
 }
 
 export interface TaskListResult<T> {
@@ -25,13 +27,13 @@ export interface TaskListResult<T> {
 
 export interface TaskListStatus {
   /** 是否已绑定完所有 request */
-  requestDone: boolean;
+  readonly requestDone: boolean;
   /** 是否已完成所有 pushResolve */
-  responseDone: boolean;
+  readonly responseDone: boolean;
   /** 已绑定的 request 数量 */
-  requestCount: number;
+  readonly requestCount: number;
   /** 已完成的 pushResolve 数量 */
-  responseCount: number;
+  readonly responseCount: number;
 }
 
 export interface TaskList<T> extends PromiseLike<TaskListResult<T>> {

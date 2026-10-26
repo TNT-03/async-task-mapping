@@ -1,3 +1,5 @@
+import type { AbortSignalLike } from "../types";
+
 /** undefined 取默认值;其余必须是正整数,否则抛错 */
 export function resolvePositiveInteger(
   value: unknown,
@@ -41,22 +43,32 @@ export function resolveTimeout(value: unknown): number | undefined {
   return value;
 }
 
-/** undefined 表示不启用;其余必须是 AbortSignal(按鸭子类型判断,不依赖全局构造函数) */
-export function resolveSignal(value: unknown): AbortSignal | undefined {
-  if (value === undefined) {
-    return undefined;
+/**
+ * 断言 `value` 是 undefined(不启用)或满足 `AbortSignalLike`(按鸭子类型判断,不依赖全局构造函数),否则抛 `TypeError`。
+ * 断言只会收窄类型而不会替换值,所以调用方传入完整的 `AbortSignal` 时,类型仍是 `AbortSignal`。
+ */
+export function assertOptionalSignal(
+  value: unknown,
+): asserts value is AbortSignalLike | undefined {
+  if (value !== undefined && !isAbortSignalLike(value)) {
+    throw new TypeError(
+      "signal must be an AbortSignal, or an object with `aborted`, `addEventListener` and `removeEventListener`",
+    );
   }
-  if (!isAbortSignalLike(value)) {
-    throw new TypeError("signal must be an AbortSignal");
-  }
+}
+
+/** undefined 表示不启用;其余必须满足 `AbortSignalLike`,否则抛 `TypeError` */
+export function resolveSignal(value: unknown): AbortSignalLike | undefined {
+  assertOptionalSignal(value);
   return value;
 }
 
-function isAbortSignalLike(value: unknown): value is AbortSignal {
+/** 只校验 `aborted` / `addEventListener` / `removeEventListener`;缺失的 `reason` 由 `watchAbort` 填充默认值 */
+function isAbortSignalLike(value: unknown): value is AbortSignalLike {
   if (typeof value !== "object" || value === null) {
     return false;
   }
-  const candidate = value as Partial<AbortSignal>;
+  const candidate = value as Partial<AbortSignalLike>;
   return (
     typeof candidate.aborted === "boolean" &&
     typeof candidate.addEventListener === "function" &&
