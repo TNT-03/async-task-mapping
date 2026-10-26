@@ -71,7 +71,7 @@ You can use these functions in different methods. All requests of a round settle
 | taskCount    | Number of times `request` (including `then` / `catch` / `finally` / `await`) can be bound, positive integer | `1`         |
 | resolveCount | Number of times `pushResolve` can be called, positive integer                                                 | `1`         |
 | timeout      | Timeout in milliseconds (> 0 and ≤ 2147483647). Counted from the first request of a round. Rejects with `TaskTimeoutError`     | `undefined` |
-| signal       | An `AbortSignal`. See [abort](#abort-and-timeout)                                                             | `undefined` |
+| signal       | An `AbortSignal` (or any `AbortSignalLike`). See [abort](#abort-and-timeout)                                                             | `undefined` |
 
 Invalid values throw immediately: a non-number throws `TypeError`, a non-positive-integer `taskCount` / `resolveCount` or a non-positive `timeout` throws `RangeError`, and a `signal` that is not an `AbortSignal` throws `TypeError`.
 
@@ -155,7 +155,7 @@ The result of the above code is:
 | name    | description                                                                                    | default     |
 | ------- | ---------------------------------------------------------------------------------------------- | ----------- |
 | timeout | Timeout in milliseconds (> 0 and ≤ 2147483647) of **each** request. A timed-out request leaves the queue        | `undefined` |
-| signal  | An `AbortSignal`. See [abort](#abort-and-timeout)                                              | `undefined` |
+| signal  | An `AbortSignal` (or any `AbortSignalLike`). See [abort](#abort-and-timeout)                                              | `undefined` |
 
 #### Methods on createTaskOrder Instances
 
@@ -323,6 +323,7 @@ Exported types:
 | `TaskListResult<T>`                     | `{ readonly list: readonly T[]; readonly dataMap: Readonly<Record<string, T>> }`                  |
 | `TaskListStatus`, `TaskOrderStatus`     | Return types of `getStatus()`                                                                    |
 | `StepTaskFunction<T>`, `StepTaskOptions<T>` | Task function `(signal: AbortSignal) => PromiseLike<T> \| T` and options of `createStepTask`  |
+| `AbortSignalLike`                       | The minimal shape of `signal` accepted by the factories: `aborted`, `addEventListener`, `removeEventListener` and `reason`. A real `AbortSignal` fits; if a custom object has no `reason`, an `AbortError` is used when it aborts |
 | `TaskClearedError`, `TaskTimeoutError`  | Error classes (values, not only types), usable with `instanceof`                                 |
 
 The `reason` of a rejection is typed as `unknown`, so narrow it before use: `if (error instanceof TaskTimeoutError) { ... }`.
@@ -340,7 +341,7 @@ Errors that **reject** the returned Promise:
 | `TaskClearedError` | `clear()` was called while the request was pending                                        |
 | `TaskTimeoutError` | `timeout` was configured and the request did not settle in time                           |
 | `RangeError`       | `request` over the limit (`createTaskList`)                                               |
-| `signal.reason`    | The `signal` was aborted: pending and later requests reject with it                       |
+| `signal.reason`    | The `signal` was aborted: pending and later requests reject with it (an `AbortError` if the signal has no `reason`) |
 | the `reason` of `pushReject` | Whatever you passed to `pushReject(reason)`                                      |
 
 Errors that are **thrown synchronously**:

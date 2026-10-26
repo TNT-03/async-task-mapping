@@ -1,3 +1,5 @@
+import type { AbortSignalLike } from "../types";
+
 export interface TaskOrderOptions {
   /**
    * 每个 request 的超时毫秒数(> 0 且 ≤ 2147483647),超时后该 request 以 TaskTimeoutError reject 并出队。
@@ -8,14 +10,14 @@ export interface TaskOrderOptions {
    * 取消信号:abort 后等价于 `clear()`,但 pending 的 request 以 `signal.reason` reject。
    * 实例此后失效:之后的 `request()` 同样 reject,`pushResolve` / `pushReject` 被静默忽略。
    */
-  signal?: AbortSignal | undefined;
+  signal?: AbortSignalLike | undefined;
 }
 
 export interface TaskOrderStatus {
   /** 尚未匹配到数据的 request 数量 */
-  pendingRequests: number;
+  readonly pendingRequests: number;
   /** 尚未匹配到 request 的数据(含 pushReject)数量 */
-  pendingResolve: number;
+  readonly pendingResolve: number;
 }
 
 export interface TaskOrder<T> extends PromiseLike<T> {
