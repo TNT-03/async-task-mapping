@@ -1,5 +1,8 @@
 import { watchAbort } from "../internal/lifecycle";
-import { assertPositiveInteger, resolveSignal } from "../internal/validate";
+import {
+  assertOptionalSignal,
+  assertPositiveInteger,
+} from "../internal/validate";
 
 /**
  * 并发池里的任务函数。
@@ -35,7 +38,10 @@ export function createStepTask<T>(
     throw new TypeError("tasks must be an array of functions");
   }
   const limit = assertPositiveInteger(options.limit, "limit");
-  const signal = resolveSignal(options.signal);
+  // signal 会原样转发给任务函数(常见用法是传给 fetch),所以保持完整的 AbortSignal 类型,
+  // 断言只做运行时校验,不会改变它的类型
+  const signal = options.signal;
+  assertOptionalSignal(signal);
   const onComplete = options.onComplete;
   // 没有传入 signal 时,仍给任务一个永不 abort 的信号,保证任务函数的参数始终可用
   const taskSignal = signal ?? new AbortController().signal;

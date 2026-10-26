@@ -1,4 +1,5 @@
 export { TaskClearedError, TaskTimeoutError } from "./errors";
+export type { AbortSignalLike } from "./types";
 export { createTaskList } from "./taskList/createTaskList";
 export type {
   TaskList,

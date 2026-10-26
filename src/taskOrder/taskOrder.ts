@@ -1,12 +1,13 @@
 import { TaskClearedError, TaskTimeoutError } from "../errors";
 import { startTimer, watchAbortWeakly } from "../internal/lifecycle";
 import { Thenable } from "../internal/thenable";
+import type { AbortSignalLike } from "../types";
 import { Queue } from "./queue";
 import type { TaskOrder, TaskOrderStatus } from "./types";
 
 export interface TaskOrderConfig {
   timeout: number | undefined;
-  signal: AbortSignal | undefined;
+  signal: AbortSignalLike | undefined;
 }
 
 interface PendingRequest<T> {

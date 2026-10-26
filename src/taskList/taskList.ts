@@ -1,6 +1,7 @@
 import { TaskClearedError, TaskTimeoutError } from "../errors";
 import { startTimer, watchAbortWeakly } from "../internal/lifecycle";
 import { Thenable } from "../internal/thenable";
+import type { AbortSignalLike } from "../types";
 import type { TaskList, TaskListResult, TaskListStatus } from "./types";
 
 export interface TaskListConfig {
@@ -8,18 +9,30 @@ export interface TaskListConfig {
   taskCount: number;
   resolveCount: number;
   timeout: number | undefined;
-  signal: AbortSignal | undefined;
+  signal: AbortSignalLike | undefined;
 }
 
-type RoundState = "static" | "pending" | "fulfilled" | "rejected";
+/**
+ * 一轮任务的状态:
+ * - static:尚无 request 绑定;
+ * - pending:已有 request 绑定,等待结算;
+ * - fulfilled:已成功结算,携带本轮结果;
+ * - rejected:已失败(pushReject 或 timeout),携带失败原因。
+ */
+type Round<T> =
+  | { readonly status: "static" }
+  | { readonly status: "pending" }
+  | { readonly status: "fulfilled"; readonly result: TaskListResult<T> }
+  | { readonly status: "rejected"; readonly reason: unknown };
 
 interface Waiter<T> {
   resolve: (result: TaskListResult<T>) => void;
   reject: (reason: unknown) => void;
 }
 
-interface Failure {
-  reason: unknown;
+/** 用对象包一层,以便区分"没有原因"与"原因是 undefined" */
+interface Reason {
+  readonly reason: unknown;
 }
 
 /**
@@ -35,18 +48,17 @@ export class TaskListImpl<T>
   readonly #resolveCount: number;
   readonly #timeout: number | undefined;
 
-  #state: RoundState = "static";
+  #round: Round<T> = { status: "static" };
   #paused = false;
   /** 本轮已绑定的 request 数量(包含结算后立即返回结果的) */
   #boundRequests = 0;
   #waiters: Waiter<T>[] = [];
   #values: T[] = [];
   #named = new Map<string, T>();
-  /** 已记录的失败;paused 期间 pushReject 只记录,running 后才分发 */
-  #failure: Failure | null = null;
-  #result: TaskListResult<T> | null = null;
+  /** 已记录但尚未分发的失败;paused 期间 pushReject 只记录,running 后才分发。分发后移入 `#round` */
+  #pendingFailure: Reason | null = null;
   #cancelTimer: (() => void) | null = null;
-  #aborted: Failure | null = null;
+  #aborted: Reason | null = null;
 
   constructor(config: TaskListConfig) {
     super();
@@ -75,16 +87,18 @@ export class TaskListImpl<T>
     }
     this.#boundRequests++;
 
-    if (this.#state === "fulfilled" && this.#result) {
-      return Promise.resolve(this.#result);
-    }
-    if (this.#state === "rejected" && this.#failure) {
-      return Promise.reject(this.#failure.reason);
-    }
-
-    if (this.#state === "static") {
-      this.#state = "pending";
-      this.#startTimeout();
+    const round = this.#round;
+    switch (round.status) {
+      case "fulfilled":
+        return Promise.resolve(round.result);
+      case "rejected":
+        return Promise.reject(round.reason);
+      case "static":
+        this.#round = { status: "pending" };
+        this.#startTimeout();
+        break;
+      case "pending":
+        break;
     }
     return new Promise<TaskListResult<T>>((resolve, reject) => {
       this.#waiters.push({ resolve, reject });
@@ -112,7 +126,7 @@ export class TaskListImpl<T>
       return;
     }
     this.#assertCanPush();
-    this.#failure = { reason };
+    this.#pendingFailure = { reason };
     this.#flush();
   }
 
@@ -140,8 +154,9 @@ export class TaskListImpl<T>
 
   /** 本轮已结算且所有 request 名额都已用完,下一次 request 应开启新一轮 */
   #isDrained(): boolean {
+    const status = this.#round.status;
     return (
-      (this.#state === "fulfilled" || this.#state === "rejected") &&
+      (status === "fulfilled" || status === "rejected") &&
       this.#boundRequests === this.#taskCount
     );
   }
@@ -150,10 +165,14 @@ export class TaskListImpl<T>
     // 无序列表:上一轮已成功结算且名额用完时,此时的 push 属于新一轮,与 request() 保持一致。
     // 有序列表必须先 request(),而 request() 会自行开启新一轮,所以这里仍按超限处理。
     // 失败的一轮不在此列,仍需 clear() 或等下一次 request() 才会结束
-    if (!this.#ordered && this.#state === "fulfilled" && this.#isDrained()) {
+    if (
+      !this.#ordered &&
+      this.#round.status === "fulfilled" &&
+      this.#isDrained()
+    ) {
       this.#resetRound();
     }
-    if (this.#failure) {
+    if (this.#pendingFailure || this.#round.status === "rejected") {
       throw new Error(
         "The task list has been rejected, call clear() before pushing again",
       );
@@ -167,10 +186,15 @@ export class TaskListImpl<T>
     if (this.#paused) {
       return;
     }
-    if (this.#failure) {
-      this.#settleRejected(this.#failure.reason);
-    } else if (
-      this.#state !== "fulfilled" &&
+    if (this.#pendingFailure) {
+      this.#settleRejected(this.#pendingFailure.reason);
+      return;
+    }
+    // 只有尚未结算的一轮(static / pending)才可能被结算为成功;
+    // 已 fulfilled 无需重复结算,已 rejected(如 timeout)则不能被后来凑齐的数据覆盖
+    const status = this.#round.status;
+    if (
+      (status === "static" || status === "pending") &&
       this.#values.length === this.#resolveCount
     ) {
       this.#settleFulfilled();
@@ -183,8 +207,7 @@ export class TaskListImpl<T>
       list: [...this.#values],
       dataMap: Object.fromEntries(this.#named),
     };
-    this.#result = result;
-    this.#state = "fulfilled";
+    this.#round = { status: "fulfilled", result };
     this.#stopTimeout();
     const waiters = this.#waiters;
     this.#waiters = [];
@@ -194,8 +217,8 @@ export class TaskListImpl<T>
   }
 
   #settleRejected(reason: unknown): void {
-    this.#failure = { reason };
-    this.#state = "rejected";
+    this.#round = { status: "rejected", reason };
+    this.#pendingFailure = null;
     this.#stopTimeout();
     const waiters = this.#waiters;
     this.#waiters = [];
@@ -223,12 +246,11 @@ export class TaskListImpl<T>
   /** 重置为全新的一轮,不触碰仍在 pending 的 waiter */
   #resetRound(): void {
     this.#stopTimeout();
-    this.#state = "static";
+    this.#round = { status: "static" };
     this.#boundRequests = 0;
     this.#values = [];
     this.#named = new Map();
-    this.#failure = null;
-    this.#result = null;
+    this.#pendingFailure = null;
   }
 
   /** 丢弃当前一轮:pending 的 request 以 reason reject */

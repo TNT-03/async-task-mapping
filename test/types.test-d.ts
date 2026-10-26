@@ -7,6 +7,7 @@ import {
   createTaskOrder,
 } from "../src/index";
 import type {
+  AbortSignalLike,
   StepTaskOptions,
   TaskList,
   TaskListOptions,
@@ -37,6 +38,12 @@ describe("createTaskList 类型", () => {
     expectTypeOf<TaskListResult<number>["dataMap"]>().toEqualTypeOf<
       Readonly<Record<string, number>>
     >();
+    expectTypeOf<TaskListStatus>().toEqualTypeOf<{
+      readonly requestDone: boolean;
+      readonly responseDone: boolean;
+      readonly requestCount: number;
+      readonly responseCount: number;
+    }>();
   });
 
   it("不指定泛型时数据类型为 unknown", () => {
@@ -66,9 +73,27 @@ describe("createTaskList 类型", () => {
     createTaskList({ taskCount: "2" });
     // @ts-expect-error 不存在的选项名会报错
     createTaskList({ unknown: true });
-    // @ts-expect-error signal 必须是 AbortSignal 类型
+    // @ts-expect-error signal 必须满足 AbortSignalLike(至少有 aborted 与监听方法)
     createTaskList({ signal: {} });
     assertType<TaskListOptions>({ ordered: false, taskCount: 2, timeout: 100 });
+  });
+
+  it("signal 接受真实的 AbortSignal 与只实现必要成员的对象", () => {
+    assertType<TaskListOptions>({ signal: new AbortController().signal });
+    assertType<TaskOrderOptions>({ signal: new AbortController().signal });
+    assertType<AbortSignalLike>(new AbortController().signal);
+    assertType<AbortSignalLike>({
+      aborted: false,
+      reason: undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+    // @ts-expect-error 类型上 reason 是必需的(运行时缺失会填充默认的 AbortError)
+    assertType<AbortSignalLike>({
+      aborted: false,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
   });
 });
 
@@ -82,8 +107,8 @@ describe("createTaskOrder 类型", () => {
     expectTypeOf(order.getLastCompletedTask()).toEqualTypeOf<string | null>();
     expectTypeOf(order.getStatus()).toEqualTypeOf<TaskOrderStatus>();
     expectTypeOf<TaskOrderStatus>().toEqualTypeOf<{
-      pendingRequests: number;
-      pendingResolve: number;
+      readonly pendingRequests: number;
+      readonly pendingResolve: number;
     }>();
   });
 
